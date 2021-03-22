@@ -9,6 +9,13 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QWidget
+from pyqtgraph import PlotWidget, plot
+import pyqtgraph as pg
+from SigSource import SigSource
+import numpy as np
+import sys
+import matplotlib.pyplot as plt
 
 
 class Ui_MainWindow(object):
@@ -71,12 +78,12 @@ class Ui_MainWindow(object):
         self.power_type_cb.addItems(['U', 'P'])
 
         self.line = QtWidgets.QFrame(self.centralwidget)
-        self.line.setGeometry(QtCore.QRect(20, 240, 191, 20))
+        self.line.setGeometry(QtCore.QRect(20, 230, 191, 20))
         self.line.setFrameShape(QtWidgets.QFrame.HLine)
         self.line.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.line.setObjectName("line")
         self.phys_chan_lb = QtWidgets.QLabel(self.centralwidget)
-        self.phys_chan_lb.setGeometry(QtCore.QRect(20, 260, 151, 20))
+        self.phys_chan_lb.setGeometry(QtCore.QRect(20, 250, 151, 20))
         font = QtGui.QFont()
         font.setPointSize(10)
         font.setBold(True)
@@ -84,28 +91,28 @@ class Ui_MainWindow(object):
         self.phys_chan_lb.setFont(font)
         self.phys_chan_lb.setObjectName("phys_chan_lb")
         self.diffusers_lb = QtWidgets.QLabel(self.centralwidget)
-        self.diffusers_lb.setGeometry(QtCore.QRect(20, 295, 65, 16))
+        self.diffusers_lb.setGeometry(QtCore.QRect(20, 285, 65, 16))
         self.diffusers_lb.setObjectName("diffusers_lb")
         self.diffusers_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.diffusers_text.setGeometry(QtCore.QRect(100, 290, 101, 22))
+        self.diffusers_text.setGeometry(QtCore.QRect(100, 280, 101, 22))
         self.diffusers_text.setObjectName("diffusers_text")
         self.direct_ray_chb = QtWidgets.QCheckBox(self.centralwidget)
-        self.direct_ray_chb.setGeometry(QtCore.QRect(100, 320, 81, 20))
+        self.direct_ray_chb.setGeometry(QtCore.QRect(100, 310, 81, 20))
         self.direct_ray_chb.setObjectName("direct_ray_chb")
         self.noise_amp_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.noise_amp_text.setGeometry(QtCore.QRect(100, 345, 101, 22))
+        self.noise_amp_text.setGeometry(QtCore.QRect(100, 335, 101, 22))
         self.noise_amp_text.setObjectName("noise_amp_text")
         self.noise_amp_lb = QtWidgets.QLabel(self.centralwidget)
-        self.noise_amp_lb.setGeometry(QtCore.QRect(20, 350, 65, 16))
+        self.noise_amp_lb.setGeometry(QtCore.QRect(20, 340, 65, 16))
         self.noise_amp_lb.setObjectName("noise_amp_lb")
         self.dist_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.dist_text.setGeometry(QtCore.QRect(100, 375, 101, 22))
+        self.dist_text.setGeometry(QtCore.QRect(100, 365, 101, 22))
         self.dist_text.setObjectName("dist_text")
         self.dist_lb = QtWidgets.QLabel(self.centralwidget)
-        self.dist_lb.setGeometry(QtCore.QRect(20, 380, 65, 16))
+        self.dist_lb.setGeometry(QtCore.QRect(20, 370, 65, 16))
         self.dist_lb.setObjectName("dist_lb")
         self.line_2 = QtWidgets.QFrame(self.centralwidget)
-        self.line_2.setGeometry(QtCore.QRect(20, 410, 191, 16))
+        self.line_2.setGeometry(QtCore.QRect(20, 390, 191, 16))
         self.line_2.setFrameShape(QtWidgets.QFrame.HLine)
         self.line_2.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.line_2.setObjectName("line_2")
@@ -114,9 +121,34 @@ class Ui_MainWindow(object):
         self.line_3.setFrameShape(QtWidgets.QFrame.VLine)
         self.line_3.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.line_3.setObjectName("line_3")
+
         self.calc_btn = QtWidgets.QPushButton(self.centralwidget)
-        self.calc_btn.setGeometry(QtCore.QRect(20, 430, 93, 28))
+        self.calc_btn.setGeometry(QtCore.QRect(110, 410, 93, 28))
         self.calc_btn.setObjectName("calc_btn")
+
+        self.plot_sig_btn = QtWidgets.QPushButton(self.centralwidget)
+        self.plot_sig_btn.setGeometry(QtCore.QRect(20, 410, 93, 28))
+        self.plot_sig_btn.setObjectName("plot_sig_btn")
+        self.rclick = False
+        self.plot_sig_btn.clicked.connect(self.showSignal)
+
+        self.graphWidget = pg.PlotWidget(self.centralwidget)
+        self.graphWidget.setBackground('w')
+        self.pen = pg.mkPen(color=(255, 0, 0), width=2)
+        self.graphWidget.setFixedSize(180, 165)
+        self.graphWidget.move(20, 470)
+
+        self.noise_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.noise_chb.setGeometry(QtCore.QRect(20, 440, 81, 20))
+        self.noise_chb.setObjectName("noise_chb")
+        self.delays_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.delays_chb.setGeometry(QtCore.QRect(110, 440, 81, 20))
+        self.delays_chb.setObjectName("delays_chb")
+
+        self.dev_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.dev_chb.setGeometry(QtCore.QRect(20, 640, 81, 20))
+        self.dev_chb.setObjectName("dev_chb")
+
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 1280, 26))
@@ -128,6 +160,19 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
+
+    def showSignal(self):
+        self.sig = SigSource()
+        self.sig.modulation = self.modulation_cb.currentText()
+        self.sig.duration = 5
+        self.sig.power_val = 5
+        self.sig.periods = 5
+        sig2plot_x, sig2plot_y = self.sig.generateSig()
+        self.graphWidget.clear()
+        self.graphWidget.plot(sig2plot_x, sig2plot_y, pen=self.pen)
+        if self.dev_chb.isChecked():
+            plt.plot(sig2plot_x, sig2plot_y)
+            plt.show()
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -144,10 +189,15 @@ class Ui_MainWindow(object):
         self.noise_amp_lb.setText(_translate("MainWindow", "Noise amp:"))
         self.dist_lb.setText(_translate("MainWindow", "Distance:"))
         self.calc_btn.setText(_translate("MainWindow", "Calculate"))
+        self.plot_sig_btn.setText(_translate("MainWindow", "Plot signal"))
+        self.noise_chb.setText(_translate("MainWindow", "+Noise"))
+        self.delays_chb.setText(_translate("MainWindow", "+Delays"))
+        self.dev_chb.setText(_translate("MainWindow", "Dev"))
 
 
 if __name__ == "__main__":
     import sys
+
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
