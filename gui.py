@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 
 class Ui_MainWindow(object):
-    def setupUi(self, MainWindow):
+    def __init__(self):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1280, 720)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
@@ -39,43 +39,42 @@ class Ui_MainWindow(object):
         self.modulation_lb = QtWidgets.QLabel(self.centralwidget)
         self.modulation_lb.setGeometry(QtCore.QRect(20, 45, 65, 16))
         self.modulation_lb.setObjectName("modulation_lb")
-        self.modulation_cb.addItems(['Rect', 'Radio Sig', 'Gold', 'Kasami'])
 
-        self.duration_lb = QtWidgets.QLabel(self.centralwidget)
-        self.duration_lb.setGeometry(QtCore.QRect(20, 105, 65, 16))
-        self.duration_lb.setObjectName("duration_lb")
-        self.duration_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.duration_text.setGeometry(QtCore.QRect(100, 100, 101, 22))
-        self.duration_text.setObjectName("duration_text")
-        self.power_val_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.power_val_text.setGeometry(QtCore.QRect(100, 70, 51, 22))
-        self.power_val_text.setObjectName("power_val_text")
-        self.power_units_cb = QtWidgets.QComboBox(self.centralwidget)
-        self.power_units_cb.setGeometry(QtCore.QRect(150, 70, 51, 22))
-        self.power_units_cb.setObjectName("power_units_cb")
-        self.periods_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.periods_text.setGeometry(QtCore.QRect(100, 155, 101, 22))
-        self.periods_text.setObjectName("periods_text")
         self.periods_lb = QtWidgets.QLabel(self.centralwidget)
-        self.periods_lb.setGeometry(QtCore.QRect(20, 160, 70, 16))
+        self.periods_lb.setGeometry(QtCore.QRect(20, 100, 65, 16))
         self.periods_lb.setObjectName("periods_lb")
-        self.N_lb = QtWidgets.QLabel(self.centralwidget)
-        self.N_lb.setGeometry(QtCore.QRect(20, 185, 65, 16))
-        self.N_lb.setObjectName("N_lb")
-        self.N_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.N_text.setGeometry(QtCore.QRect(100, 180, 101, 22))
-        self.N_text.setObjectName("N_text")
-        self.state_cb = QtWidgets.QComboBox(self.centralwidget)
-        self.state_cb.setGeometry(QtCore.QRect(100, 205, 100, 22))
-        self.state_cb.setObjectName("state_cb")
+        self.periods_text = QtWidgets.QLineEdit(self.centralwidget)
+        self.periods_text.setGeometry(QtCore.QRect(100, 100, 101, 22))
+        self.periods_text.setObjectName("periods_text")
+
+        self.u_lb = QtWidgets.QLabel(self.centralwidget)
+        self.u_lb.setGeometry(QtCore.QRect(20, 70, 61, 22))
+        self.u_lb.setObjectName("u_lb")
+
+        self.u_text = QtWidgets.QLineEdit(self.centralwidget)
+        self.u_text.setGeometry(QtCore.QRect(100, 70, 101, 22))
+        self.u_text.setObjectName("u_text")
+
+        self.freq_text = QtWidgets.QLineEdit(self.centralwidget)
+        self.freq_text.setGeometry(QtCore.QRect(100, 130, 101, 22))
+        self.freq_text.setObjectName("periods_text")
+        self.freq_lb = QtWidgets.QLabel(self.centralwidget)
+        self.freq_lb.setGeometry(QtCore.QRect(20, 130, 70, 16))
+        self.freq_lb.setObjectName("periods_lb")
+        self.poly_lb = QtWidgets.QLabel(self.centralwidget)
+        self.poly_lb.setGeometry(QtCore.QRect(20, 180, 65, 16))
+        self.poly_lb.setObjectName("N_lb")
+        self.poly_text = QtWidgets.QLineEdit(self.centralwidget)
+        self.poly_text.setGeometry(QtCore.QRect(100, 180, 101, 22))
+        self.poly_text.setObjectName("N_text")
+
+        self.state_text = QtWidgets.QLineEdit(self.centralwidget)
+        self.state_text.setGeometry(QtCore.QRect(100, 210, 101, 22))
+        self.state_text.setObjectName("state_text")
         self.state_lb = QtWidgets.QLabel(self.centralwidget)
         self.state_lb.setGeometry(QtCore.QRect(20, 210, 65, 16))
         self.state_lb.setObjectName("state_lb")
 
-        self.power_type_cb = QtWidgets.QComboBox(self.centralwidget)
-        self.power_type_cb.setGeometry(QtCore.QRect(20, 70, 61, 22))
-        self.power_type_cb.setObjectName("power_type_cb")
-        self.power_type_cb.addItems(['U', 'P'])
 
         self.line = QtWidgets.QFrame(self.centralwidget)
         self.line.setGeometry(QtCore.QRect(20, 230, 191, 20))
@@ -129,14 +128,8 @@ class Ui_MainWindow(object):
         self.plot_sig_btn = QtWidgets.QPushButton(self.centralwidget)
         self.plot_sig_btn.setGeometry(QtCore.QRect(20, 410, 93, 28))
         self.plot_sig_btn.setObjectName("plot_sig_btn")
-        self.rclick = False
-        self.plot_sig_btn.clicked.connect(self.showSignal)
 
-        self.graphWidget = pg.PlotWidget(self.centralwidget)
-        self.graphWidget.setBackground('w')
-        self.pen = pg.mkPen(color=(255, 0, 0), width=2)
-        self.graphWidget.setFixedSize(180, 165)
-        self.graphWidget.move(20, 470)
+
 
         self.noise_chb = QtWidgets.QCheckBox(self.centralwidget)
         self.noise_chb.setGeometry(QtCore.QRect(20, 440, 81, 20))
@@ -148,6 +141,8 @@ class Ui_MainWindow(object):
         self.dev_chb = QtWidgets.QCheckBox(self.centralwidget)
         self.dev_chb.setGeometry(QtCore.QRect(20, 640, 81, 20))
         self.dev_chb.setObjectName("dev_chb")
+
+        self.init_gui_elements()
 
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
@@ -161,17 +156,36 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
-    def showSignal(self):
+    def init_gui_elements(self):
+        self.modulation_cb.addItems(['Rect', 'Radio Sig', 'Gold', 'Kasami'])
+        self.freq_text.setText('1600')
+        self.u_text.setText('1')
+        self.periods_text.setText('1')
+        self.pen = pg.mkPen(color=(255, 0, 0), width=2)
+        self.sig_plot_widget = pg.PlotWidget(self.centralwidget)
+        self.sig_plot_widget.setBackground('w')
+        self.sig_plot_widget.setFixedSize(180, 165)
+        self.sig_plot_widget.move(20, 470)
+        self.plot_sig_btn.clicked.connect(self.show_signal)
+
+    def show_signal(self):
         self.sig = SigSource()
         self.sig.modulation = self.modulation_cb.currentText()
-        self.sig.duration = 5
-        self.sig.power_val = 5
-        self.sig.periods = 5
-        sig2plot_x, sig2plot_y = self.sig.generateSig()
-        self.graphWidget.clear()
-        self.graphWidget.plot(sig2plot_x, sig2plot_y, pen=self.pen)
+        self.sig.periods = int(self.periods_text.text())
+        self.sig.u = int(self.u_text.text())
+        self.sig.freq = int(self.freq_text.text())
+        self.sig.polys = self.poly_text.text()
+        if self.state_text.text() != '':
+            self.sig.state = self.state_text.text()
+        sig_x, sig_y = self.sig.generate_sig()
+        sig2plot_x = sig_x[:int(len(sig_x)/10)]
+        sig2plot_y = sig_y[:int(len(sig_y)/10)]
+        self.sig_plot_widget.clear()
+        self.sig_plot_widget.showGrid(x=True, y=True)
+        self.sig_plot_widget.plot(sig2plot_x, sig2plot_y, pen=self.pen)
         if self.dev_chb.isChecked():
             plt.plot(sig2plot_x, sig2plot_y)
+            plt.grid()
             plt.show()
 
     def retranslateUi(self, MainWindow):
@@ -179,9 +193,10 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(_translate("MainWindow", "Time Delay"))
         self.sig_source_lb.setText(_translate("MainWindow", "Signal source"))
         self.modulation_lb.setText(_translate("MainWindow", "Modulation:"))
-        self.duration_lb.setText(_translate("MainWindow", "Duration:"))
+        self.u_lb.setText(_translate("MainWindow", "U:"))
         self.periods_lb.setText(_translate("MainWindow", "Periods:"))
-        self.N_lb.setText(_translate("MainWindow", "N:"))
+        self.freq_lb.setText(_translate("MainWindow", "Frequency:"))
+        self.poly_lb.setText(_translate("MainWindow", "Polynomial:"))
         self.state_lb.setText(_translate("MainWindow", "State:"))
         self.phys_chan_lb.setText(_translate("MainWindow", "Physical channel"))
         self.diffusers_lb.setText(_translate("MainWindow", "Diffusers:"))
@@ -201,6 +216,5 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
     MainWindow.show()
     sys.exit(app.exec_())
