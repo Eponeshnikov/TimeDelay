@@ -9,21 +9,28 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QWidget
-from pyqtgraph import PlotWidget, plot
 import pyqtgraph as pg
-from SigSource import SigSource
+from SigSource import SigSource, spectrum, add_zer
 import numpy as np
-import sys
 import matplotlib.pyplot as plt
+import ast
 
 
 class Ui_MainWindow(object):
     def __init__(self):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1280, 720)
+        MainWindow.resize(1500, 720)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
+
+        self.pen = pg.mkPen(color=(9, 139, 219), width=2)
+        self.styles = {'color': 'r', 'font-size': '14px'}
+        self.preview_plt = pg.PlotWidget(self.centralwidget)
+        self.sig_graph = pg.PlotWidget(self.centralwidget)
+        self.sig_fft_graph = pg.PlotWidget(self.centralwidget)
+
+        self.sig = SigSource()
+
         self.sig_source_lb = QtWidgets.QLabel(self.centralwidget)
         self.sig_source_lb.setGeometry(QtCore.QRect(20, 10, 120, 20))
         font = QtGui.QFont()
@@ -32,50 +39,36 @@ class Ui_MainWindow(object):
         font.setWeight(75)
         self.sig_source_lb.setFont(font)
         self.sig_source_lb.setObjectName("sig_source_lb")
-
         self.modulation_cb = QtWidgets.QComboBox(self.centralwidget)
         self.modulation_cb.setGeometry(QtCore.QRect(100, 40, 100, 22))
         self.modulation_cb.setObjectName("modulation_cb")
         self.modulation_lb = QtWidgets.QLabel(self.centralwidget)
         self.modulation_lb.setGeometry(QtCore.QRect(20, 45, 65, 16))
         self.modulation_lb.setObjectName("modulation_lb")
-
         self.periods_lb = QtWidgets.QLabel(self.centralwidget)
         self.periods_lb.setGeometry(QtCore.QRect(20, 100, 65, 16))
         self.periods_lb.setObjectName("periods_lb")
         self.periods_text = QtWidgets.QLineEdit(self.centralwidget)
         self.periods_text.setGeometry(QtCore.QRect(100, 100, 101, 22))
         self.periods_text.setObjectName("periods_text")
-
-        self.u_lb = QtWidgets.QLabel(self.centralwidget)
-        self.u_lb.setGeometry(QtCore.QRect(20, 70, 61, 22))
-        self.u_lb.setObjectName("u_lb")
-
         self.u_text = QtWidgets.QLineEdit(self.centralwidget)
         self.u_text.setGeometry(QtCore.QRect(100, 70, 101, 22))
         self.u_text.setObjectName("u_text")
-
         self.freq_text = QtWidgets.QLineEdit(self.centralwidget)
         self.freq_text.setGeometry(QtCore.QRect(100, 130, 101, 22))
-        self.freq_text.setObjectName("periods_text")
+        self.freq_text.setObjectName("freq_text")
         self.freq_lb = QtWidgets.QLabel(self.centralwidget)
         self.freq_lb.setGeometry(QtCore.QRect(20, 130, 70, 16))
-        self.freq_lb.setObjectName("periods_lb")
+        self.freq_lb.setObjectName("freq_lb")
         self.poly_lb = QtWidgets.QLabel(self.centralwidget)
         self.poly_lb.setGeometry(QtCore.QRect(20, 180, 65, 16))
-        self.poly_lb.setObjectName("N_lb")
+        self.poly_lb.setObjectName("poly_lb")
         self.poly_text = QtWidgets.QLineEdit(self.centralwidget)
         self.poly_text.setGeometry(QtCore.QRect(100, 180, 101, 22))
-        self.poly_text.setObjectName("N_text")
-
-        self.state_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.state_text.setGeometry(QtCore.QRect(100, 210, 101, 22))
-        self.state_text.setObjectName("state_text")
+        self.poly_text.setObjectName("poly_text")
         self.state_lb = QtWidgets.QLabel(self.centralwidget)
         self.state_lb.setGeometry(QtCore.QRect(20, 210, 65, 16))
         self.state_lb.setObjectName("state_lb")
-
-
         self.line = QtWidgets.QFrame(self.centralwidget)
         self.line.setGeometry(QtCore.QRect(20, 230, 191, 20))
         self.line.setFrameShape(QtWidgets.QFrame.HLine)
@@ -90,7 +83,7 @@ class Ui_MainWindow(object):
         self.phys_chan_lb.setFont(font)
         self.phys_chan_lb.setObjectName("phys_chan_lb")
         self.diffusers_lb = QtWidgets.QLabel(self.centralwidget)
-        self.diffusers_lb.setGeometry(QtCore.QRect(20, 285, 65, 16))
+        self.diffusers_lb.setGeometry(QtCore.QRect(20, 280, 65, 16))
         self.diffusers_lb.setObjectName("diffusers_lb")
         self.diffusers_text = QtWidgets.QLineEdit(self.centralwidget)
         self.diffusers_text.setGeometry(QtCore.QRect(100, 280, 101, 22))
@@ -120,27 +113,36 @@ class Ui_MainWindow(object):
         self.line_3.setFrameShape(QtWidgets.QFrame.VLine)
         self.line_3.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.line_3.setObjectName("line_3")
-
         self.calc_btn = QtWidgets.QPushButton(self.centralwidget)
         self.calc_btn.setGeometry(QtCore.QRect(110, 410, 93, 28))
         self.calc_btn.setObjectName("calc_btn")
-
         self.plot_sig_btn = QtWidgets.QPushButton(self.centralwidget)
         self.plot_sig_btn.setGeometry(QtCore.QRect(20, 410, 93, 28))
         self.plot_sig_btn.setObjectName("plot_sig_btn")
-
-
-
         self.noise_chb = QtWidgets.QCheckBox(self.centralwidget)
         self.noise_chb.setGeometry(QtCore.QRect(20, 440, 81, 20))
         self.noise_chb.setObjectName("noise_chb")
         self.delays_chb = QtWidgets.QCheckBox(self.centralwidget)
         self.delays_chb.setGeometry(QtCore.QRect(110, 440, 81, 20))
         self.delays_chb.setObjectName("delays_chb")
-
         self.dev_chb = QtWidgets.QCheckBox(self.centralwidget)
-        self.dev_chb.setGeometry(QtCore.QRect(20, 640, 81, 20))
+        self.dev_chb.setGeometry(QtCore.QRect(160, 640, 81, 20))
         self.dev_chb.setObjectName("dev_chb")
+        self.state_text = QtWidgets.QLineEdit(self.centralwidget)
+        self.state_text.setGeometry(QtCore.QRect(100, 210, 101, 22))
+        self.state_text.setObjectName("state_text")
+        self.u_lb = QtWidgets.QLabel(self.centralwidget)
+        self.u_lb.setGeometry(QtCore.QRect(20, 70, 65, 16))
+        self.u_lb.setObjectName("u_lb")
+        self.conf_btn = QtWidgets.QToolButton(self.centralwidget)
+        self.conf_btn.setGeometry(QtCore.QRect(120, 640, 27, 22))
+        self.conf_btn.setObjectName("conf_btn")
+        self.conf_text = QtWidgets.QLineEdit(self.centralwidget)
+        self.conf_text.setGeometry(QtCore.QRect(60, 640, 51, 22))
+        self.conf_text.setObjectName("conf_text")
+        self.conf_lb = QtWidgets.QLabel(self.centralwidget)
+        self.conf_lb.setGeometry(QtCore.QRect(20, 642, 65, 16))
+        self.conf_lb.setObjectName("conf_lb")
 
         self.init_gui_elements()
 
@@ -159,33 +161,60 @@ class Ui_MainWindow(object):
     def init_gui_elements(self):
         self.modulation_cb.addItems(['Rect', 'Radio Sig', 'Gold', 'Kasami'])
         self.freq_text.setText('1600')
-        self.u_text.setText('1')
+        self.u_text.setText('10')
         self.periods_text.setText('1')
-        self.pen = pg.mkPen(color=(255, 0, 0), width=2)
-        self.sig_plot_widget = pg.PlotWidget(self.centralwidget)
-        self.sig_plot_widget.setBackground('w')
-        self.sig_plot_widget.setFixedSize(180, 165)
-        self.sig_plot_widget.move(20, 470)
+        self.preview_plt.setBackground('w')
+        self.preview_plt.setFixedSize(180, 165)
+        self.preview_plt.move(20, 470)
+        self.preview_plt.showGrid(x=True, y=True)
+
+        self.sig_graph.setBackground('w')
+        self.sig_graph.setFixedSize(1250, 150)
+        self.sig_graph.move(230, 10)
+        self.sig_graph.showGrid(x=True, y=True)
+        self.sig_graph.setLabel('left', 'U, μV', **self.styles)
+        self.sig_graph.setLabel('bottom', 't, us', **self.styles)
+
+        self.sig_fft_graph.setBackground('w')
+        self.sig_fft_graph.setFixedSize(1250, 150)
+        self.sig_fft_graph.move(230, 520)
+        self.sig_fft_graph.showGrid(x=True, y=True)
+        self.sig_fft_graph.setLabel('left', 'U, μV', **self.styles)
+        self.sig_fft_graph.setLabel('bottom', 'f, MHz', **self.styles)
+
         self.plot_sig_btn.clicked.connect(self.show_signal)
 
     def show_signal(self):
-        self.sig = SigSource()
-        self.sig.modulation = self.modulation_cb.currentText()
+        self.sig.modulation = str(self.modulation_cb.currentText())
         self.sig.periods = int(self.periods_text.text())
         self.sig.u = int(self.u_text.text())
         self.sig.freq = int(self.freq_text.text())
-        self.sig.polys = self.poly_text.text()
+        try:
+            self.sig.polys = ast.literal_eval(self.poly_text.text())
+        except:
+            pass
         if self.state_text.text() != '':
-            self.sig.state = self.state_text.text()
-        sig_x, sig_y = self.sig.generate_sig()
-        sig2plot_x = sig_x[:int(len(sig_x)/10)]
-        sig2plot_y = sig_y[:int(len(sig_y)/10)]
-        self.sig_plot_widget.clear()
-        self.sig_plot_widget.showGrid(x=True, y=True)
-        self.sig_plot_widget.plot(sig2plot_x, sig2plot_y, pen=self.pen)
+            self.sig.state = ast.literal_eval(self.state_text.text())
+        sig_x, sig_y, dt = self.sig.generate_sig()
+        sig2plot_x = sig_x  # [:int(len(sig_x)/10)]
+        sig2plot_y = sig_y  # [:int(len(sig_y)/10)]
+        sig_y = add_zer(sig_y)
+        sig_fft_y, sig_fft_x = spectrum(sig_y, dt)
+
+        self.sig_graph.clear()
+        self.sig_graph.plot(sig2plot_x, sig2plot_y, pen=self.pen)
+        if len(sig2plot_y) > 3125:
+            self.sig_graph.setXRange(0, sig2plot_x[len(sig2plot_x) - 1] / len(sig2plot_x) * 3125)
+
+        self.sig_fft_graph.clear()
+        self.sig_fft_graph.plot(sig_fft_x, sig_fft_y, pen=self.pen)
+
         if self.dev_chb.isChecked():
-            plt.plot(sig2plot_x, sig2plot_y)
-            plt.grid()
+            fig, axs = plt.subplots(2)
+            axs[0].plot(sig2plot_x, sig2plot_y)
+            axs[1].plot(sig_fft_x, sig_fft_y)
+            axs[0].grid()
+            axs[1].grid()
             plt.show()
 
     def retranslateUi(self, MainWindow):
@@ -193,9 +222,8 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(_translate("MainWindow", "Time Delay"))
         self.sig_source_lb.setText(_translate("MainWindow", "Signal source"))
         self.modulation_lb.setText(_translate("MainWindow", "Modulation:"))
-        self.u_lb.setText(_translate("MainWindow", "U:"))
         self.periods_lb.setText(_translate("MainWindow", "Periods:"))
-        self.freq_lb.setText(_translate("MainWindow", "Frequency:"))
+        self.freq_lb.setText(_translate("MainWindow", "Frequency"))
         self.poly_lb.setText(_translate("MainWindow", "Polynomial:"))
         self.state_lb.setText(_translate("MainWindow", "State:"))
         self.phys_chan_lb.setText(_translate("MainWindow", "Physical channel"))
@@ -208,6 +236,9 @@ class Ui_MainWindow(object):
         self.noise_chb.setText(_translate("MainWindow", "+Noise"))
         self.delays_chb.setText(_translate("MainWindow", "+Delays"))
         self.dev_chb.setText(_translate("MainWindow", "Dev"))
+        self.u_lb.setText(_translate("MainWindow", "U:"))
+        self.conf_btn.setText(_translate("MainWindow", "..."))
+        self.conf_lb.setText(_translate("MainWindow", "Conf:"))
 
 
 if __name__ == "__main__":

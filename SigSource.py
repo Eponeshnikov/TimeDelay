@@ -1,29 +1,44 @@
 import numpy as np
-import ast
+from numpy.fft import rfft, rfftfreq
+
+
+def spectrum(sig, dt):
+    result = rfft(sig)
+    n = sig.size
+    freqs = rfftfreq(n, dt)
+    return 2 * (np.abs(result / len(sig))), freqs
+
+
+def add_zer(sig):
+    zer = np.zeros(8 * len(sig))
+    tmp = zer
+    tmp = tmp.tolist()
+    tmp.extend(sig)
+    tmp.extend(zer)
+    tmp = np.array(tmp)
+    return tmp
 
 
 class SigSource:
     def __init__(self):
         self.modulation = 'Rect'
-        self.power_type = 'U'
         self.u = 0
         self.periods = 0
         self.freq = 0
-        self.polys = None
-        self.poly = None
-        self.state = None
-        self.m = []
+        self.polys = []
+        self.poly = []
+        self.state = []
 
     def rect(self):
-        x, step = np.linspace(start=0, stop=5 * self.periods, num=1000, retstep=True)
+        x, step = np.linspace(0, self.periods, 1000, retstep=True)
         y = np.zeros(len(x))
         y[0:int(self.periods / step)] = self.u
-        return x, y
+        return x, y, step
 
     def radio_sig(self, mod=None):
         T = 2 * np.pi / self.freq
         if mod is not None:
-            modulation = mod.astype(np.float)
+            modulation = mod
             modulation *= np.deg2rad(180)
             self.periods = len(modulation)
             print(self.periods)
@@ -32,21 +47,16 @@ class SigSource:
 
         duration = self.periods * T
 
-        # T = self.duration / self.freq
-        # w = 2 * np.pi / T
-
-        x, step = np.linspace(start=0, stop=10 * duration, num=1000 * self.periods, retstep=True)
         y = []
         for i in range(self.periods):
-            tmp_x = np.linspace(start=T * i, stop=T * (i + 1), num=100)
+            tmp_x = np.linspace(T * i, T * (i + 1), 25, endpoint=False)
+            if i == self.periods - 1:
+                tmp_x = np.linspace(T * i, T * (i + 1), 25)
             tmp_y = np.sin(self.freq * tmp_x + modulation[i]) * self.u
             y.extend(tmp_y)
-        zer_y = np.zeros(len(x) - len(y))
-        y.extend(zer_y)
+        x, step = np.linspace(0, duration/(2*np.pi), len(y), retstep=True)
         y = np.array(y)
-        print(len(x), len(y))
-        # y[int(duration / step):] = 0
-        return x, y
+        return x, y, step
 
     def gen_V(self):
         length = max(self.poly)
@@ -65,10 +75,13 @@ class SigSource:
 
     def gen_state(self):
         length = max(self.poly)
-        state = np.random.randint(2, size=length)
+        state = np.empty(length)
+        for s in range(length):
+            state[s] = np.random.randint(2)
         return state
 
     def M_gen(self, state, L=None):
+        res_state = []
         length = max(self.poly)
         if L is None:
             L = 2 ** length - 1
@@ -90,31 +103,31 @@ class SigSource:
                 next_state = np.logical_xor(tmp_st, state2xor[state + 1])
                 tmp_st = next_state
             curr_state = next_state
-            self.m.append(curr_state[0])
+            res_state.append(curr_state[0])
             L -= 1
+        res_state = res_state
+        return res_state
 
     def gold_code(self):
-        self.polys = ast.literal_eval(self.polys)
         ms = []
         for i, poly in enumerate(self.polys):
             self.poly = poly
-            if self.state is None:
+            if len(self.state) == 0:
                 state = self.gen_state()
             else:
-                state = ast.literal_eval(self.state)[i]
-            self.m = []
-            self.M_gen(state=state)
-            ms.append(self.m)
+                state = self.state[i]
+            ms.append(self.M_gen(state))
         code = np.logical_xor(ms[0], ms[1])
+        code = code.astype(np.float)
         return code
 
     def generate_sig(self):
-        sig_X, sig_Y = 0, 0
+        sig_X, sig_Y, step = 0, 0, 0
         if self.modulation == 'Rect':
-            sig_X, sig_Y = self.rect()
+            sig_X, sig_Y, step = self.rect()
         elif self.modulation == 'Radio Sig':
-            sig_X, sig_Y = self.radio_sig()
+            sig_X, sig_Y, step = self.radio_sig()
         elif self.modulation == 'Gold':
-            sig_X, sig_Y = self.radio_sig(self.gold_code())
-        sig = (sig_X, sig_Y)
+            sig_X, sig_Y, step = self.radio_sig(self.gold_code())
+        sig = (sig_X, sig_Y, step)
         return sig
