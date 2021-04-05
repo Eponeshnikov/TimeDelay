@@ -12,7 +12,10 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 from SigSource import SigSource, spectrum, add_zer
 from PhysChannel import PhysChannel, add_delays
-import matplotlib.pyplot as plt
+from OptReceiver import OptReceiver
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import ast
 
 
@@ -26,17 +29,32 @@ class Ui_MainWindow(object):
         self.pen = pg.mkPen(color=(9, 139, 219), width=2)
         self.styles = {'color': 'r', 'font-size': '14px'}
         self.preview_plt = pg.PlotWidget(self.centralwidget)
-        self.sig_graph = pg.PlotWidget(self.centralwidget)
-        self.sig_del_noise_graph = pg.PlotWidget(self.centralwidget)
-        self.sig_fft_graph = pg.PlotWidget(self.centralwidget)
-        self.fig, self.axs = plt.subplots(3)
+
+        self.verticalLayoutWidget = QtWidgets.QWidget(self.centralwidget)
+        self.verticalLayoutWidget.setGeometry(QtCore.QRect(230, 10, 1251, 651))
+        self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
+        self.plot_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
+        self.plot_layout.setContentsMargins(0, 0, 0, 0)
+        self.plot_layout.setObjectName("plot_layout")
+        self.static_canvas = FigureCanvas(Figure())
+        self.axes = self.static_canvas.figure.subplots(2, 2,
+                                                       gridspec_kw={
+                                                           'width_ratios': [3, 1],
+                                                           'height_ratios': [1, 1]})
+        self.nav = NavigationToolbar(self.static_canvas, self.centralwidget, coordinates=False)
+        self.nav.setMinimumWidth(300)
+        self.nav.setStyleSheet("QToolBar { border: 0px }")
+        self.nav.move(230, 625)
+        self.plot_layout.addWidget(self.static_canvas)
 
         self.sig = SigSource()
         self.phys_channel = PhysChannel()
+        self.opt_rec = OptReceiver()
         self.sig_y = None
         self.sig_x = None
         self.sig_del_noise_y = None
         self.sig_del_noise_x = None
+        self.conv = None
         self.dt = None
         self.ts = None
         self.us = None
@@ -183,9 +201,9 @@ class Ui_MainWindow(object):
         self.scale_text = QtWidgets.QLineEdit(self.centralwidget)
         self.scale_text.setGeometry(QtCore.QRect(60, 370, 31, 22))
         self.scale_text.setObjectName("lambda_text")
-        self.lambda_lb = QtWidgets.QLabel(self.centralwidget)
-        self.lambda_lb.setGeometry(QtCore.QRect(20, 370, 41, 16))
-        self.lambda_lb.setObjectName("lambda_lb")
+        self.scale_lb = QtWidgets.QLabel(self.centralwidget)
+        self.scale_lb.setGeometry(QtCore.QRect(20, 370, 41, 16))
+        self.scale_lb.setObjectName("lambda_lb")
         self.sigma_lb = QtWidgets.QLabel(self.centralwidget)
         self.sigma_lb.setGeometry(QtCore.QRect(110, 370, 21, 16))
         self.sigma_lb.setObjectName("sigma_lb")
@@ -195,6 +213,12 @@ class Ui_MainWindow(object):
         self.apply_btn = QtWidgets.QPushButton(self.centralwidget)
         self.apply_btn.setGeometry(QtCore.QRect(16, 640, 41, 22))
         self.apply_btn.setObjectName("apply_btn")
+        self.orig_sig_spec_rb = QtWidgets.QRadioButton(self.centralwidget)
+        self.orig_sig_spec_rb.setGeometry(QtCore.QRect(100, 125, 95, 20))
+        self.orig_sig_spec_rb.setObjectName("orig_sig_spec_rb")
+        self.del_noise_spec_rb = QtWidgets.QRadioButton(self.centralwidget)
+        self.del_noise_spec_rb.setGeometry(QtCore.QRect(20, 125, 95, 20))
+        self.del_noise_spec_rb.setObjectName("del_noise_spec_rb")
 
         self.init_gui_elements()
 
@@ -210,13 +234,29 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
+    def init_axes(self):
+        self.static_canvas.figure.subplots_adjust(left=0.055, right=0.985, top=0.970, bottom=0.110, hspace=0.320,
+                                                  wspace=0.200)
+        self.axes[0][0].set_xlabel('t, us')
+        self.axes[0][0].set_ylabel('U, μV')
+        self.axes[0][0].grid()
+        self.axes[1][0].set_xlabel('t, us')
+        self.axes[1][0].set_ylabel('U, μV')
+        self.axes[1][0].grid()
+        self.axes[0][1].set_xlabel('t, us')
+        self.axes[0][1].set_ylabel('U, μV')
+        self.axes[0][1].grid()
+        self.axes[1][1].set_xlabel('f, MHz')
+        self.axes[1][1].set_ylabel('U, μV')
+        self.axes[1][1].grid()
+
     def init_gui_elements(self):
         self.modulation_cb.addItems(['Rect', 'Radio Sig', 'Gold', 'Kasami'])
         self.freq_text.setText('1600')
-        self.u_text.setText('10')
+        self.u_text.setText('100')
         self.periods_text.setText('1')
 
-        self.diffusers_text.setText('1')
+        self.diffusers_text.setText('5')
         self.dist_text.setText('0')
         self.noise_u_text.setText('5')
         self.a0_text.setText('100')
@@ -226,32 +266,14 @@ class Ui_MainWindow(object):
         self.sigma_text.setText('9')
         self.noise_chb.setChecked(True)
         self.delays_chb.setChecked(True)
+        self.orig_sig_spec_rb.setChecked(True)
 
         self.preview_plt.setBackground('w')
         self.preview_plt.setFixedSize(180, 145)
         self.preview_plt.move(20, 490)
         self.preview_plt.showGrid(x=True, y=True)
 
-        self.sig_graph.setBackground('w')
-        self.sig_graph.setFixedSize(1250, 150)
-        self.sig_graph.move(230, 10)
-        self.sig_graph.showGrid(x=True, y=True)
-        self.sig_graph.setLabel('left', 'U, μV', **self.styles)
-        self.sig_graph.setLabel('bottom', 't, us', **self.styles)
-
-        self.sig_del_noise_graph.setBackground('w')
-        self.sig_del_noise_graph.setFixedSize(1250, 150)
-        self.sig_del_noise_graph.move(230, 180)
-        self.sig_del_noise_graph.showGrid(x=True, y=True)
-        self.sig_del_noise_graph.setLabel('left', 'U, μV', **self.styles)
-        self.sig_del_noise_graph.setLabel('bottom', 't, us', **self.styles)
-
-        self.sig_fft_graph.setBackground('w')
-        self.sig_fft_graph.setFixedSize(1250, 150)
-        self.sig_fft_graph.move(230, 520)
-        self.sig_fft_graph.showGrid(x=True, y=True)
-        self.sig_fft_graph.setLabel('left', 'U, μV', **self.styles)
-        self.sig_fft_graph.setLabel('bottom', 'f, MHz', **self.styles)
+        self.init_axes()
 
         self.plot_sig_btn.clicked.connect(self.show_signal)
 
@@ -286,12 +308,6 @@ class Ui_MainWindow(object):
         self.ts = self.phys_channel.gen_delays(uniform=self.uni_distr_chb.isChecked())
         self.us = self.phys_channel.gen_amps(self.ts, rand=not self.no_rand_u_chb.isChecked())
 
-    def plot_delays(self):
-        self.preview_plt.clear()
-        bg = pg.BarGraphItem(x=self.ts, height=self.us, width=0.3, brush='r')
-        self.preview_plt.addItem(bg)
-        self.preview_plt.plot()
-
     def gen_del_noise_sig(self):
         self.sig_del_noise_x, self.sig_del_noise_y = self.sig_x, self.sig_y
         if self.delays_chb.isChecked():
@@ -300,50 +316,58 @@ class Ui_MainWindow(object):
             noise = self.phys_channel.gen_noise(len(self.sig_del_noise_y))
             self.sig_del_noise_y += noise
 
+    def gen_conv(self):
+        self.opt_rec.h = self.sig_y
+        self.opt_rec.sig = self.sig_del_noise_y
+        self.conv = self.opt_rec.matched_fil()
+
+    def plot_conv(self):
+        sig_x = self.sig_del_noise_x
+        sig_y = self.conv
+        self.axes[1][0].plot(sig_x, sig_y)
+
     def plot_del_noise_sig(self):
         sig2plot_x, sig2plot_y = self.sig_del_noise_x, self.sig_del_noise_y
-        self.sig_del_noise_graph.clear()
-        self.sig_del_noise_graph.plot(sig2plot_x, sig2plot_y, pen=self.pen)
-        #if len(sig2plot_y) > 3125:
-        #    self.sig_del_noise_graph.setXRange(0, sig2plot_x[len(sig2plot_x) - 1] / len(sig2plot_x) * 3125)
-        if self.dev_chb.isChecked():
-            self.axs[1].plot(sig2plot_x, sig2plot_y)
-            self.axs[1].grid()
+        self.axes[0][0].plot(sig2plot_x, sig2plot_y)
 
     def plot_sig(self):
         sig_x, sig_y, dt = self.sig_x, self.sig_y, self.dt
-        sig2plot_x = sig_x  # [:int(len(sig_x)/10)]
-        sig2plot_y = sig_y  # [:int(len(sig_y)/10)]
+        sig2plot_x = sig_x
+        sig2plot_y = sig_y
+        self.axes[0][1].plot(sig2plot_x, sig2plot_y)
+
+    def plot_delays(self):
+        self.preview_plt.clear()
+        bg = pg.BarGraphItem(x=self.ts, height=self.us, width=0.3, brush='r')
+        self.preview_plt.addItem(bg)
+        self.preview_plt.plot()
+
+    def plot_spec(self):
+        sig_x, sig_y, dt = self.sig_x, self.sig_y, self.dt
+        if self.del_noise_spec_rb.isChecked():
+            sig_x, sig_y = self.sig_del_noise_x, self.sig_del_noise_y
         sig_y = add_zer(sig_y)
         sig_fft_y, sig_fft_x = spectrum(sig_y, dt)
-
-        self.sig_graph.clear()
-        self.sig_graph.plot(sig2plot_x, sig2plot_y, pen=self.pen)
-        if len(sig2plot_y) > 3125:
-            self.sig_graph.setXRange(0, sig2plot_x[len(sig2plot_x) - 1] / len(sig2plot_x) * 3125)
-
-        self.sig_fft_graph.clear()
-        self.sig_fft_graph.plot(sig_fft_x, sig_fft_y, pen=self.pen)
-
-        if self.dev_chb.isChecked():
-            self.axs[0].plot(sig2plot_x, sig2plot_y)
-            self.axs[2].plot(sig_fft_x, sig_fft_y)
-            self.axs[0].grid()
-            self.axs[2].grid()
+        self.axes[1][1].plot(sig_fft_x, sig_fft_y)
 
     def show_signal(self):
-        self.fig.clear()
-        self.fig, self.axs = plt.subplots(3)
+        self.static_canvas.figure.clear()
+        self.axes = self.static_canvas.figure.subplots(2, 2, gridspec_kw={
+            'width_ratios': [3, 1],
+            'height_ratios': [1, 1]})
+        self.init_axes()
         self.read_sig_info()
         self.read_ph_ch_info()
         self.gen_sig()
-        self.plot_sig()
         self.gen_delays()
-        self.plot_delays()
         self.gen_del_noise_sig()
+        self.gen_conv()
+        self.plot_delays()
+        self.plot_sig()
         self.plot_del_noise_sig()
-        if self.dev_chb.isChecked():
-            self.fig.show()
+        self.plot_conv()
+        self.plot_spec()
+        self.static_canvas.draw()
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -372,9 +396,11 @@ class Ui_MainWindow(object):
         self.n_lb.setText(_translate("MainWindow", "n:"))
         self.uni_distr_chb.setText(_translate("MainWindow", "Uniform dist."))
         self.no_rand_u_chb.setText(_translate("MainWindow", "No rand"))
-        self.lambda_lb.setText(_translate("MainWindow", "Scale:"))
+        self.scale_lb.setText(_translate("MainWindow", "Scale:"))
         self.sigma_lb.setText(_translate("MainWindow", "σₗₙ:"))
         self.apply_btn.setText(_translate("MainWindow", "Apply"))
+        self.orig_sig_spec_rb.setText(_translate("MainWindow", "Orig. spec."))
+        self.del_noise_spec_rb.setText(_translate("MainWindow", "DN"))
 
 
 if __name__ == "__main__":

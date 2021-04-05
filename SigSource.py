@@ -4,13 +4,13 @@ from numpy.fft import rfft, rfftfreq
 
 def spectrum(sig, dt):
     result = rfft(sig)
-    n = sig.size
+    n = len(sig)
     freqs = rfftfreq(n, dt)
     return 2 * (np.abs(result / len(sig))), freqs
 
 
 def add_zer(sig):
-    zer = np.zeros(8 * len(sig))
+    zer = np.zeros(2 * len(sig))
     tmp = zer
     tmp = tmp.tolist()
     tmp.extend(sig)
@@ -41,7 +41,6 @@ class SigSource:
             modulation = mod
             modulation *= np.deg2rad(180)
             self.periods = len(modulation)
-            print(self.periods)
         else:
             modulation = np.zeros(self.periods)
 
