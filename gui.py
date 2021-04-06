@@ -241,20 +241,20 @@ class Ui_MainWindow(object):
         self.axes[0][0].set_ylabel('U, μV')
         self.axes[0][0].grid()
         self.axes[1][0].set_xlabel('t, us')
-        self.axes[1][0].set_ylabel('U, μV')
+        # self.axes[1][0].set_ylabel('U, μV')
         self.axes[1][0].grid()
         self.axes[0][1].set_xlabel('t, us')
         self.axes[0][1].set_ylabel('U, μV')
         self.axes[0][1].grid()
         self.axes[1][1].set_xlabel('f, MHz')
-        self.axes[1][1].set_ylabel('U, μV')
+        # self.axes[1][1].set_ylabel('U, μV')
         self.axes[1][1].grid()
 
     def init_gui_elements(self):
-        self.modulation_cb.addItems(['Rect', 'Radio Sig', 'Gold', 'Kasami'])
+        self.modulation_cb.addItems(['Radio Sig', 'Gold', 'Kasami', 'Rect'])
         self.freq_text.setText('1600')
-        self.u_text.setText('100')
-        self.periods_text.setText('1')
+        self.u_text.setText('1')
+        self.periods_text.setText('100')
 
         self.diffusers_text.setText('5')
         self.dist_text.setText('0')
@@ -263,7 +263,7 @@ class Ui_MainWindow(object):
         self.r0_text.setText('100')
         self.n_text.setText('2.7')
         self.scale_text.setText('2')
-        self.sigma_text.setText('9')
+        self.sigma_text.setText('4.5')
         self.noise_chb.setChecked(True)
         self.delays_chb.setChecked(True)
         self.orig_sig_spec_rb.setChecked(True)
@@ -348,7 +348,7 @@ class Ui_MainWindow(object):
             sig_x, sig_y = self.sig_del_noise_x, self.sig_del_noise_y
         sig_y = add_zer(sig_y)
         sig_fft_y, sig_fft_x = spectrum(sig_y, dt)
-        self.axes[1][1].plot(sig_fft_x, sig_fft_y)
+        self.axes[1][1].plot(sig_fft_x, sig_fft_y/max(sig_fft_y))
 
     def show_signal(self):
         self.static_canvas.figure.clear()

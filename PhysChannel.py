@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import expon, lognorm
+from scipy.stats import expon, norm, lognorm
 
 
 def add_delays(sig, ts, us, dt):
@@ -51,8 +51,9 @@ class PhysChannel:
             us.append(u)
         if rand:
             for u in range(len(us)):
-                sigma = 10 ** (self.sigma / 10) * us[u]
-                us[u] += lognorm.rvs(sigma)
+                y = np.random.normal(0, self.sigma ** 2, size=1)
+                alpha = 10 ** (y / 20)
+                us[u] *= alpha
         return us
 
 
