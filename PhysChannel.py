@@ -10,8 +10,8 @@ def add_delays(sig, ts, us, dt):
     del_sig_y = np.zeros(len(signal))
     for t in range(len(ts)):
         del_sig_y[int(ts[t]/dt):int(len(sig) + int(ts[t]/dt))] += sig * us[t]
-    del_sig_x = np.linspace(start=0, stop=len(del_sig_y)*dt, num=len(del_sig_y))
-    return del_sig_x, np.array(del_sig_y)
+    del_sig_x = np.linspace(start=0, stop=len(del_sig_y)*dt, num=len(del_sig_y), dtype=np.float64)
+    return del_sig_x, np.array(del_sig_y, dtype=np.float64)
 
 
 class PhysChannel:
@@ -49,6 +49,9 @@ class PhysChannel:
                 r += 300 * (ts[y] - ts[y - 1])
             u = self.a0 * (self.r0 / r) ** self.n
             us.append(u)
+        '''from matplotlib import pyplot as plt
+        plt.plot(ts, us)
+        plt.show()'''
         if rand:
             for u in range(len(us)):
                 y = np.random.normal(0, self.sigma ** 2, size=1)

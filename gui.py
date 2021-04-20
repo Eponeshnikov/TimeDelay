@@ -13,10 +13,12 @@ import pyqtgraph as pg
 from SigSource import SigSource, spectrum, add_zer
 from PhysChannel import PhysChannel, add_delays
 from OptReceiver import OptReceiver
+from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import ast
+import numpy as np
 
 
 class Ui_MainWindow(object):
@@ -235,13 +237,13 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def init_axes(self):
-        self.static_canvas.figure.subplots_adjust(left=0.055, right=0.985, top=0.970, bottom=0.110, hspace=0.320,
+        self.static_canvas.figure.subplots_adjust(left=0.075, right=0.985, top=0.970, bottom=0.110, hspace=0.320,
                                                   wspace=0.200)
         self.axes[0][0].set_xlabel('t, us')
         self.axes[0][0].set_ylabel('U, μV')
         self.axes[0][0].grid()
         self.axes[1][0].set_xlabel('t, us')
-        # self.axes[1][0].set_ylabel('U, μV')
+        self.axes[1][0].set_ylabel('|h(t)|²')
         self.axes[1][0].grid()
         self.axes[0][1].set_xlabel('t, us')
         self.axes[0][1].set_ylabel('U, μV')
@@ -276,6 +278,7 @@ class Ui_MainWindow(object):
         self.init_axes()
 
         self.plot_sig_btn.clicked.connect(self.show_signal)
+        self.calc_btn.clicked.connect(self.L_iter)
 
     def read_sig_info(self):
         self.sig.modulation = str(self.modulation_cb.currentText())
@@ -288,6 +291,12 @@ class Ui_MainWindow(object):
             pass
         if self.state_text.text() != '':
             self.sig.state = ast.literal_eval(self.state_text.text())
+        if self.mod_param_text.text() == '':
+            self.sig.ch_freq = float(self.freq_text.text())
+        else:
+            ch = ast.literal_eval(self.mod_param_text.text())
+            self.sig.ch_freq = ch[0]
+            self.sig.ch_n = ch[1]
 
     def read_ph_ch_info(self):
         self.phys_channel.diff = int(self.diffusers_text.text())
@@ -312,6 +321,14 @@ class Ui_MainWindow(object):
         self.sig_del_noise_x, self.sig_del_noise_y = self.sig_x, self.sig_y
         if self.delays_chb.isChecked():
             self.sig_del_noise_x, self.sig_del_noise_y = add_delays(self.sig_y, self.ts, self.us, self.dt)
+            '''fig, ax = plt.subplots(nrows=2, ncols=1)
+            ax[0].plot(self.sig_del_noise_x, self.sig_del_noise_y)
+            self.gen_conv()
+            ax[1].plot(self.sig_del_noise_x, self.conv)
+            ax[0].grid()
+            ax[1].grid()
+            plt.show()'''
+
         if self.noise_chb.isChecked():
             noise = self.phys_channel.gen_noise(len(self.sig_del_noise_y))
             self.sig_del_noise_y += noise
@@ -348,7 +365,75 @@ class Ui_MainWindow(object):
             sig_x, sig_y = self.sig_del_noise_x, self.sig_del_noise_y
         sig_y = add_zer(sig_y)
         sig_fft_y, sig_fft_x = spectrum(sig_y, dt)
-        self.axes[1][1].plot(sig_fft_x, sig_fft_y/max(sig_fft_y))
+        self.axes[1][1].plot(sig_fft_x, sig_fft_y / max(sig_fft_y))
+
+    def corr(self):
+        import numpy as np
+        n1 = np.correlate(self.sig_y / 2, self.sig_y / 2, mode='same')
+        print(max(n1))
+        noise = np.random.normal(0, self.phys_channel.noise_u, size=len(self.sig_y))
+        n2 = np.correlate(noise, noise, mode='same')
+        print(max(n2))
+        print(10 * np.log10(max(n1) / max(n2)))
+        print()
+
+    def shift_code(self, code):
+        res = np.roll(code, 1)
+        # res[len(code) - 1] = 1.0
+        return res
+
+    def bin_conv(self, code):
+        res = []
+        code_copy = np.copy(code)
+        for i in range(len(code)):
+            tmp = 0
+            for j in range(len(code)):
+                if code_copy[j] == code[j]:
+                    tmp += 1
+                else:
+                    tmp -= 1
+            res.append(tmp)
+            code_copy = self.shift_code(code_copy)
+        return res
+
+    def L_iter(self):
+        self.read_sig_info()
+        self.read_ph_ch_info()
+        codes = self.sig.gold_code(pair=False)
+        print(codes)
+        res = self.bin_conv(codes)
+        plt.plot(res)
+        plt.show()
+        '''a = codes[0]
+        b = codes[1]
+        b_copy = np.copy(b)
+        fig, ax = plt.subplots(nrows=2, ncols=1)
+        codes = []
+        for i in range(1):
+            b = b_copy
+            for j in range(len(b)):
+                code = np.logical_xor(a, b)
+                code = code.astype(np.float)
+                codes.append(code)
+                self.sig_x, self.sig_y, self.dt = self.sig.radio_sig(code)
+                conv = np.abs(np.convolve(self.sig_y, self.sig_y, mode='same')) ** 2
+                ax[0].clear()
+                ax[1].clear()
+                ax[0].grid()
+                ax[1].grid()
+                # ax[0].plot(self.sig_x, self.sig_y)
+
+                # ax[0].set_xlabel('t, us')
+                # ax[1].set_xlabel('t, us')
+                # ax[1].plot(self.sig_x, conv)
+
+                # plt.show()
+                # fig.savefig('signals/' + str(i) + '_' + str(j) + '.png')
+                b = self.shift_code(b)
+            a = self.shift_code(a)
+        cov = np.cov(codes)
+        plt.plot(cov[0])
+        plt.show()'''
 
     def show_signal(self):
         self.static_canvas.figure.clear()
@@ -367,6 +452,7 @@ class Ui_MainWindow(object):
         self.plot_del_noise_sig()
         self.plot_conv()
         self.plot_spec()
+        self.corr()
         self.static_canvas.draw()
 
     def retranslateUi(self, MainWindow):

@@ -25,6 +25,8 @@ class SigSource:
         self.u = 0
         self.periods = 0
         self.freq = 0
+        self.ch_freq = 1
+        self.ch_n = 1
         self.polys = []
         self.poly = []
         self.state = []
@@ -36,9 +38,13 @@ class SigSource:
         return x, y, step
 
     def radio_sig(self, mod=None):
+        T1 = 2 * np.pi / (self.ch_freq * self.ch_n)
         T = 2 * np.pi / self.freq
+        devide = T1 / T
+        T *= devide
+
         if mod is not None:
-            modulation = mod
+            modulation = np.copy(mod)
             modulation *= np.deg2rad(180)
             self.periods = len(modulation)
         else:
@@ -48,12 +54,12 @@ class SigSource:
 
         y = []
         for i in range(self.periods):
-            tmp_x = np.linspace(T * i, T * (i + 1), 25, endpoint=False)
+            tmp_x = np.linspace(T * i, T * (i + 1), 15 * int(devide), endpoint=False)
             if i == self.periods - 1:
-                tmp_x = np.linspace(T * i, T * (i + 1), 25)
+                tmp_x = np.linspace(T * i, T * (i + 1), 15 * int(devide))
             tmp_y = np.sin(self.freq * tmp_x + modulation[i]) * self.u
             y.extend(tmp_y)
-        x, step = np.linspace(0, duration/(2*np.pi), len(y), retstep=True)
+        x, step = np.linspace(0, duration / (2 * np.pi), len(y), retstep=True)
         y = np.array(y)
         return x, y, step
 
@@ -107,7 +113,8 @@ class SigSource:
         res_state = res_state
         return res_state
 
-    def gold_code(self):
+    def gold_code(self, pair=False):
+        from matplotlib import pyplot as plt
         ms = []
         for i, poly in enumerate(self.polys):
             self.poly = poly
@@ -117,7 +124,19 @@ class SigSource:
                 state = self.state[i]
             ms.append(self.M_gen(state))
         code = np.logical_xor(ms[0], ms[1])
+        ones = np.where(code == True)
+        zer = np.where(code == False)
+        #print(len(ones[0]) - len(zer[0]))
+        ms = np.array(ms)
+        ms = ms.astype(np.float)
         code = code.astype(np.float)
+        #print(ms[0])
+        conv = np.correlate(code, code)
+        #print(conv)
+        #plt.plot(conv)
+        #plt.show()
+        if pair:
+            code = ms
         return code
 
     def generate_sig(self):
