@@ -216,11 +216,14 @@ class Ui_MainWindow(object):
         self.apply_btn.setGeometry(QtCore.QRect(16, 640, 41, 22))
         self.apply_btn.setObjectName("apply_btn")
         self.orig_sig_spec_rb = QtWidgets.QRadioButton(self.centralwidget)
-        self.orig_sig_spec_rb.setGeometry(QtCore.QRect(100, 125, 95, 20))
+        self.orig_sig_spec_rb.setGeometry(QtCore.QRect(70, 125, 95, 20))
         self.orig_sig_spec_rb.setObjectName("orig_sig_spec_rb")
         self.del_noise_spec_rb = QtWidgets.QRadioButton(self.centralwidget)
         self.del_noise_spec_rb.setGeometry(QtCore.QRect(20, 125, 95, 20))
         self.del_noise_spec_rb.setObjectName("del_noise_spec_rb")
+        self.balanced_codes_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.balanced_codes_chb.setGeometry(QtCore.QRect(160, 125, 41, 20))
+        self.balanced_codes_chb.setObjectName("balanced_codes_chb")
 
         self.init_gui_elements()
 
@@ -243,7 +246,7 @@ class Ui_MainWindow(object):
         self.axes[0][0].set_ylabel('U, μV')
         self.axes[0][0].grid()
         self.axes[1][0].set_xlabel('t, us')
-        self.axes[1][0].set_ylabel('|h(t)|²')
+        self.axes[1][0].set_ylabel('|h(t)|')
         self.axes[1][0].grid()
         self.axes[0][1].set_xlabel('t, us')
         self.axes[0][1].set_ylabel('U, μV')
@@ -253,18 +256,18 @@ class Ui_MainWindow(object):
         self.axes[1][1].grid()
 
     def init_gui_elements(self):
-        self.modulation_cb.addItems(['Radio Sig', 'Gold', 'Kasami', 'Rect'])
+        self.modulation_cb.addItems(['Gold', 'Radio Sig', 'Rect'])
         self.freq_text.setText('1600')
         self.u_text.setText('1')
-        self.periods_text.setText('100')
+        self.periods_text.setText('31')
 
         self.diffusers_text.setText('5')
-        self.dist_text.setText('0')
+        self.dist_text.setText('200')
         self.noise_u_text.setText('5')
         self.a0_text.setText('100')
         self.r0_text.setText('100')
         self.n_text.setText('2.7')
-        self.scale_text.setText('2')
+        self.scale_text.setText('0.2')
         self.sigma_text.setText('4.5')
         self.noise_chb.setChecked(True)
         self.delays_chb.setChecked(True)
@@ -318,7 +321,7 @@ class Ui_MainWindow(object):
         self.us = self.phys_channel.gen_amps(self.ts, rand=not self.no_rand_u_chb.isChecked())
 
     def gen_del_noise_sig(self):
-        self.sig_del_noise_x, self.sig_del_noise_y = self.sig_x, self.sig_y
+        self.sig_del_noise_x, self.sig_del_noise_y = np.copy(self.sig_x), np.copy(self.sig_y)
         if self.delays_chb.isChecked():
             self.sig_del_noise_x, self.sig_del_noise_y = add_delays(self.sig_y, self.ts, self.us, self.dt)
             '''fig, ax = plt.subplots(nrows=2, ncols=1)
@@ -340,8 +343,10 @@ class Ui_MainWindow(object):
 
     def plot_conv(self):
         sig_x = self.sig_del_noise_x
-        sig_y = self.conv
+        sig_y = np.abs(self.conv)
+        peaks_x, peaks_y = self.find_extrem()
         self.axes[1][0].plot(sig_x, sig_y)
+        self.axes[1][0].plot(peaks_x, peaks_y, 'x')
 
     def plot_del_noise_sig(self):
         sig2plot_x, sig2plot_y = self.sig_del_noise_x, self.sig_del_noise_y
@@ -355,9 +360,11 @@ class Ui_MainWindow(object):
 
     def plot_delays(self):
         self.preview_plt.clear()
-        bg = pg.BarGraphItem(x=self.ts, height=self.us, width=0.3, brush='r')
-        self.preview_plt.addItem(bg)
-        self.preview_plt.plot()
+        if self.delays_chb.isChecked():
+            bg = pg.BarGraphItem(x=self.ts, height=self.us, width=len(self.sig_x) * (self.sig_x[1] - self.sig_x[0]),
+                                 brush='r')
+            self.preview_plt.addItem(bg)
+            self.preview_plt.plot()
 
     def plot_spec(self):
         sig_x, sig_y, dt = self.sig_x, self.sig_y, self.dt
@@ -367,15 +374,94 @@ class Ui_MainWindow(object):
         sig_fft_y, sig_fft_x = spectrum(sig_y, dt)
         self.axes[1][1].plot(sig_fft_x, sig_fft_y / max(sig_fft_y))
 
-    def corr(self):
+    def snr_calc(self):
         import numpy as np
-        n1 = np.correlate(self.sig_y / 2, self.sig_y / 2, mode='same')
-        print(max(n1))
-        noise = np.random.normal(0, self.phys_channel.noise_u, size=len(self.sig_y))
-        n2 = np.correlate(noise, noise, mode='same')
-        print(max(n2))
-        print(10 * np.log10(max(n1) / max(n2)))
-        print()
+        # n1 = np.abs(np.correlate(self.sig_y / 2, self.sig_y / 2, mode='valid') / len(self.sig_y))
+        n1s = []
+        for u in self.us:
+            n1 = np.var(self.sig_y * u, ddof=1)
+            n1s.append(n1)
+        n1s = np.array(n1s)
+        # print(max(n1))
+        # noise = np.random.normal(0, self.phys_channel.noise_u, size=len(self.sig_y))
+        n2 = self.phys_channel.noise_u ** 2
+        # print(n2)
+        # plt.hist(self.conv)
+        # plt.show()
+        print('SNR:', 10 * np.log10(n1s / n2))
+        return n1s / n2
+        # print()
+
+    def find_extrem(self, l=2):
+        from scipy.signal import argrelextrema, find_peaks, find_peaks_cwt
+        from scipy import signal
+        import pywt
+        data = self.conv
+        # data/=max(data)
+        index = self.sig_del_noise_x
+        # Create wavelet object and define parameters
+        w = pywt.Wavelet('sym4')
+        maxlev = pywt.dwt_max_level(len(data), w.dec_len)
+        # maxlev = 2 # Override if desired
+        print("maximum level is " + str(maxlev))
+        threshold = 2* self.phys_channel.noise_u / (max(self.us) * 3)  # Threshold for filtering
+        # Decompose into wavelet components, to the level selected:
+        coeffs = pywt.wavedec(data, 'sym4', level=maxlev)
+        # cA = pywt.threshold(cA, threshold*max(cA))
+        for i in range(1, len(coeffs)):
+            # plt.subplot(maxlev, 1, i)
+            # plt.plot(coeffs[i])
+            coeffs[i] = pywt.threshold(coeffs[i], threshold * max(coeffs[i]))
+            # plt.plot(coeffs[i])
+        datarec = pywt.waverec(coeffs, 'sym4')
+        '''plt.figure()
+        plt.subplot(2, 1, 1)
+        plt.plot(index[mintime:maxtime], data[mintime:maxtime])
+        plt.xlabel('time (s)')
+        plt.ylabel('microvolts (uV)')
+        plt.title("Raw signal")
+        plt.subplot(2, 1, 2)
+        plt.plot(index[mintime:maxtime], datarec[mintime:maxtime])
+        plt.xlabel('time (s)')
+        plt.ylabel('microvolts (uV)')
+        plt.title("De-noised signal using wavelet techniques")
+        plt.tight_layout()
+        plt.show()'''
+        indexs = []
+        '''for i in range(1):
+            extremums = argrelextrema(datarec, np.greater)
+            for_plot = []
+            for e in extremums[0]:
+                for_plot.append(datarec[e])
+            for_plot = np.array(for_plot)
+            datarec = for_plot
+            indexs.append(extremums[0])'''
+        #indexs = []
+        for i in range(l):
+            sig_id, _q = find_peaks(datarec, distance=int(20 / (l + 1)), height=0)
+            #sig_id = find_peaks_cwt(datarec, np.arange(1, 10))
+            datarec = datarec[sig_id]
+            indexs.append(sig_id)
+
+        datarec = np.array(datarec)
+        datarec = np.append(np.array([0]), datarec)
+        datarec = np.append(datarec, np.array([0]))
+        peaks, _ = find_peaks(datarec, height=0.02, distance=4)
+        #peaks = find_peaks_cwt(datarec, np.arange(1,10))
+        ids = indexs[0][indexs[1]]
+        #print(indexs[0])
+        #ids = np.array(indexs)
+        x = self.sig_del_noise_x[ids[peaks - 1]]
+        y = np.abs(self.conv[ids[peaks - 1]])
+        '''sorted = np.sort(y)
+        sorted = np.flip(sorted)
+        n = []
+        for e in range(len(sorted)-1):
+            n.append(sorted[e+1]/sorted[e])'''
+        #print(np.shape(np.histogram(y, bins=10)))
+        #print(plt.hist(y, bins=20)[0], plt.hist(y, bins=20)[0][0]/plt.hist(y, bins=20)[0][1])
+        plt.show()
+        return x, y
 
     def shift_code(self, code):
         res = np.roll(code, 1)
@@ -399,11 +485,25 @@ class Ui_MainWindow(object):
     def L_iter(self):
         self.read_sig_info()
         self.read_ph_ch_info()
+        self.gen_sig()
+        pos = []
+        for i in range(100):
+            self.gen_delays()
+            self.gen_del_noise_sig()
+            self.gen_conv()
+            pos.append(self.sig_del_noise_x[np.argmax(self.conv)])
+        self.snr_calc()
+        pos = np.array(pos)
+        print(pos.mean())
+        print(pos.var())
+        print()
+        '''self.read_sig_info()
+        self.read_ph_ch_info()
         codes = self.sig.gold_code(pair=False)
         print(codes)
         res = self.bin_conv(codes)
         plt.plot(res)
-        plt.show()
+        plt.show()'''
         '''a = codes[0]
         b = codes[1]
         b_copy = np.copy(b)
@@ -452,8 +552,10 @@ class Ui_MainWindow(object):
         self.plot_del_noise_sig()
         self.plot_conv()
         self.plot_spec()
-        self.corr()
+        snr = self.snr_calc()
         self.static_canvas.draw()
+        #self.find_extrem()
+        # self.find_extrem()
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -487,6 +589,7 @@ class Ui_MainWindow(object):
         self.apply_btn.setText(_translate("MainWindow", "Apply"))
         self.orig_sig_spec_rb.setText(_translate("MainWindow", "Orig. spec."))
         self.del_noise_spec_rb.setText(_translate("MainWindow", "DN"))
+        self.balanced_codes_chb.setText(_translate("MainWindow", "BC"))
 
 
 if __name__ == "__main__":

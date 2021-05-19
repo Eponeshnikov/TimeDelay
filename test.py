@@ -175,7 +175,7 @@ def gen_amps(r0, a0, n, ys, dist, sigm, rand=True):
         for u in range(len(us)):
             sigma = 10 ** (sigm / 10) * us[u]
             us[u] += lognorm.rvs(sigma)
-    plt.stem(ys, us)
+    plt.hist(us)
     plt.show()
     return us
 
@@ -195,10 +195,10 @@ def add_delays(sig, ts, us, dt):
     return del_sig
 
 
-'''sign_x, signy, dt = rect(0.2)
-ts = gen_delays(4, 2)
+sign_x, signy, dt = rect(0.2)
+ts = gen_delays(400, 2)
 us = gen_amps(100, 100, 2.7, ts, 2000, 9)
-add_delays(signy, ts, us,dt)'''
+#add_delays(signy, ts, us,dt)
 
 
 def test():
@@ -213,7 +213,7 @@ def test():
 #test()
 def H():
     from scipy.special import gamma
-    k = np.linspace(2, 5, 100)
+    k = np.linspace(1, 5, 100)
     s_sum_x = np.arange(1, max(k)-1)
     sum_s = np.sum(1/s_sum_x - 0.577)
     res = 1/np.log(2)*(k + np.log(2000/30) + gamma(k) + (k+1)*sum_s)
@@ -222,4 +222,4 @@ def H():
     plt.xlabel('k')
     plt.ylabel('H(k)')
     plt.show()
-H()
+#H()

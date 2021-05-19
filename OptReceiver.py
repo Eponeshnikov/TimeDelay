@@ -7,4 +7,4 @@ class OptReceiver:
         self.sig = None
 
     def matched_fil(self):
-        return np.abs(np.convolve(np.flip(self.h), self.sig, mode='same'))**2
+        return np.convolve(np.flip(self.h), self.sig, mode='same')/len(self.sig)

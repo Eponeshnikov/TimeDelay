@@ -592,7 +592,7 @@
    <widget class="QRadioButton" name="orig_sig_spec_rb">
     <property name="geometry">
      <rect>
-      <x>100</x>
+      <x>70</x>
       <y>125</y>
       <width>95</width>
       <height>20</height>
@@ -613,6 +613,19 @@
     </property>
     <property name="text">
      <string>DN</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="balanced_codes_chb">
+    <property name="geometry">
+     <rect>
+      <x>160</x>
+      <y>125</y>
+      <width>41</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>BC</string>
     </property>
    </widget>
   </widget>

@@ -54,9 +54,9 @@ class SigSource:
 
         y = []
         for i in range(self.periods):
-            tmp_x = np.linspace(T * i, T * (i + 1), 15 * int(devide), endpoint=False)
+            tmp_x = np.linspace(T * i, T * (i + 1), 25 * int(devide), endpoint=False)
             if i == self.periods - 1:
-                tmp_x = np.linspace(T * i, T * (i + 1), 15 * int(devide))
+                tmp_x = np.linspace(T * i, T * (i + 1), 25 * int(devide))
             tmp_y = np.sin(self.freq * tmp_x + modulation[i]) * self.u
             y.extend(tmp_y)
         x, step = np.linspace(0, duration / (2 * np.pi), len(y), retstep=True)

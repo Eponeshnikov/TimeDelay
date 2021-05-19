@@ -18,6 +18,7 @@ class PhysChannel:
     def __init__(self):
         self.sig = None
         self.sig_step = None
+        self.noise = 0
         self.noise_u = 0
         self.diff = 0
         self.scale = 1
@@ -28,8 +29,8 @@ class PhysChannel:
         self.dist = 1000
 
     def gen_noise(self, size):
-        noise = np.random.normal(0, self.noise_u, size=size)
-        return noise
+        self.noise = np.random.normal(0, self.noise_u, size=size)
+        return self.noise
 
     def gen_delays(self, uniform=False):
         if uniform is False:
@@ -49,14 +50,15 @@ class PhysChannel:
                 r += 300 * (ts[y] - ts[y - 1])
             u = self.a0 * (self.r0 / r) ** self.n
             us.append(u)
-        '''from matplotlib import pyplot as plt
-        plt.plot(ts, us)
-        plt.show()'''
+        #from matplotlib import pyplot as plt
+
         if rand:
             for u in range(len(us)):
                 y = np.random.normal(0, self.sigma ** 2, size=1)
                 alpha = 10 ** (y / 20)
                 us[u] *= alpha
+        #plt.hist(np.array(us))
+        #plt.show()
         return us
 
 
