@@ -114,7 +114,6 @@ class SigSource:
         return res_state
 
     def gold_code(self, pair=False):
-        from matplotlib import pyplot as plt
         ms = []
         for i, poly in enumerate(self.polys):
             self.poly = poly
@@ -124,19 +123,7 @@ class SigSource:
                 state = self.state[i]
             ms.append(self.M_gen(state))
         code = np.logical_xor(ms[0], ms[1])
-        ones = np.where(code == True)
-        zer = np.where(code == False)
-        #print(len(ones[0]) - len(zer[0]))
-        ms = np.array(ms)
-        ms = ms.astype(np.float)
         code = code.astype(np.float)
-        #print(ms[0])
-        conv = np.correlate(code, code)
-        #print(conv)
-        #plt.plot(conv)
-        #plt.show()
-        if pair:
-            code = ms
         return code
 
     def generate_sig(self):

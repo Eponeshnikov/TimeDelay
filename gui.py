@@ -57,6 +57,9 @@ class Ui_MainWindow(object):
         self.sig_del_noise_y = None
         self.sig_del_noise_x = None
         self.conv = None
+        self.peaks_x = None
+        self.border_x = None
+        self.border_y = None
         self.dt = None
         self.ts = None
         self.us = None
@@ -311,14 +314,19 @@ class Ui_MainWindow(object):
         self.phys_channel.scale = float(self.scale_text.text())
         self.phys_channel.sigma = float(self.sigma_text.text())
 
+        self.opt_rec.noise_u = float(self.noise_u_text.text())
+
     def gen_sig(self):
         self.sig_x, self.sig_y, self.dt = self.sig.generate_sig()
         self.phys_channel.sig = self.sig_y
         self.phys_channel.sig_step = self.dt
 
     def gen_delays(self):
-        self.ts = self.phys_channel.gen_delays(uniform=self.uni_distr_chb.isChecked())
+        self.ts = self.phys_channel.gen_delays(uniform=self.uni_distr_chb.isChecked(),
+                                               direct_ray=self.direct_ray_chb.isChecked())
         self.us = self.phys_channel.gen_amps(self.ts, rand=not self.no_rand_u_chb.isChecked())
+
+        self.opt_rec.us = np.copy(self.us)
 
     def gen_del_noise_sig(self):
         self.sig_del_noise_x, self.sig_del_noise_y = np.copy(self.sig_x), np.copy(self.sig_y)
@@ -340,13 +348,21 @@ class Ui_MainWindow(object):
         self.opt_rec.h = self.sig_y
         self.opt_rec.sig = self.sig_del_noise_y
         self.conv = self.opt_rec.matched_fil()
+        self.peaks_x, self.border_x, self.border_y = self.opt_rec.find_peaks_()
 
     def plot_conv(self):
         sig_x = self.sig_del_noise_x
         sig_y = np.abs(self.conv)
-        peaks_x, peaks_y = self.find_extrem()
+
+        # print(np.average(self.conv), np.std(self.conv, ddof=1))
+        try:
+            peaks_x = self.peaks_x
+            peaks_y = sig_y[peaks_x]
+            peaks_x = self.sig_del_noise_x[peaks_x]
+            self.axes[1][0].plot(peaks_x, peaks_y, 'x', color='r')
+        except Exception as e:
+            print(e)
         self.axes[1][0].plot(sig_x, sig_y)
-        self.axes[1][0].plot(peaks_x, peaks_y, 'x')
 
     def plot_del_noise_sig(self):
         sig2plot_x, sig2plot_y = self.sig_del_noise_x, self.sig_del_noise_y
@@ -376,92 +392,14 @@ class Ui_MainWindow(object):
 
     def snr_calc(self):
         import numpy as np
-        # n1 = np.abs(np.correlate(self.sig_y / 2, self.sig_y / 2, mode='valid') / len(self.sig_y))
         n1s = []
         for u in self.us:
             n1 = np.var(self.sig_y * u, ddof=1)
             n1s.append(n1)
         n1s = np.array(n1s)
-        # print(max(n1))
-        # noise = np.random.normal(0, self.phys_channel.noise_u, size=len(self.sig_y))
         n2 = self.phys_channel.noise_u ** 2
-        # print(n2)
-        # plt.hist(self.conv)
-        # plt.show()
         print('SNR:', 10 * np.log10(n1s / n2))
         return n1s / n2
-        # print()
-
-    def find_extrem(self, l=2):
-        from scipy.signal import argrelextrema, find_peaks, find_peaks_cwt
-        from scipy import signal
-        import pywt
-        data = self.conv
-        # data/=max(data)
-        index = self.sig_del_noise_x
-        # Create wavelet object and define parameters
-        w = pywt.Wavelet('sym4')
-        maxlev = pywt.dwt_max_level(len(data), w.dec_len)
-        # maxlev = 2 # Override if desired
-        print("maximum level is " + str(maxlev))
-        threshold = 2* self.phys_channel.noise_u / (max(self.us) * 3)  # Threshold for filtering
-        # Decompose into wavelet components, to the level selected:
-        coeffs = pywt.wavedec(data, 'sym4', level=maxlev)
-        # cA = pywt.threshold(cA, threshold*max(cA))
-        for i in range(1, len(coeffs)):
-            # plt.subplot(maxlev, 1, i)
-            # plt.plot(coeffs[i])
-            coeffs[i] = pywt.threshold(coeffs[i], threshold * max(coeffs[i]))
-            # plt.plot(coeffs[i])
-        datarec = pywt.waverec(coeffs, 'sym4')
-        '''plt.figure()
-        plt.subplot(2, 1, 1)
-        plt.plot(index[mintime:maxtime], data[mintime:maxtime])
-        plt.xlabel('time (s)')
-        plt.ylabel('microvolts (uV)')
-        plt.title("Raw signal")
-        plt.subplot(2, 1, 2)
-        plt.plot(index[mintime:maxtime], datarec[mintime:maxtime])
-        plt.xlabel('time (s)')
-        plt.ylabel('microvolts (uV)')
-        plt.title("De-noised signal using wavelet techniques")
-        plt.tight_layout()
-        plt.show()'''
-        indexs = []
-        '''for i in range(1):
-            extremums = argrelextrema(datarec, np.greater)
-            for_plot = []
-            for e in extremums[0]:
-                for_plot.append(datarec[e])
-            for_plot = np.array(for_plot)
-            datarec = for_plot
-            indexs.append(extremums[0])'''
-        #indexs = []
-        for i in range(l):
-            sig_id, _q = find_peaks(datarec, distance=int(20 / (l + 1)), height=0)
-            #sig_id = find_peaks_cwt(datarec, np.arange(1, 10))
-            datarec = datarec[sig_id]
-            indexs.append(sig_id)
-
-        datarec = np.array(datarec)
-        datarec = np.append(np.array([0]), datarec)
-        datarec = np.append(datarec, np.array([0]))
-        peaks, _ = find_peaks(datarec, height=0.02, distance=4)
-        #peaks = find_peaks_cwt(datarec, np.arange(1,10))
-        ids = indexs[0][indexs[1]]
-        #print(indexs[0])
-        #ids = np.array(indexs)
-        x = self.sig_del_noise_x[ids[peaks - 1]]
-        y = np.abs(self.conv[ids[peaks - 1]])
-        '''sorted = np.sort(y)
-        sorted = np.flip(sorted)
-        n = []
-        for e in range(len(sorted)-1):
-            n.append(sorted[e+1]/sorted[e])'''
-        #print(np.shape(np.histogram(y, bins=10)))
-        #print(plt.hist(y, bins=20)[0], plt.hist(y, bins=20)[0][0]/plt.hist(y, bins=20)[0][1])
-        plt.show()
-        return x, y
 
     def shift_code(self, code):
         res = np.roll(code, 1)
@@ -554,7 +492,8 @@ class Ui_MainWindow(object):
         self.plot_spec()
         snr = self.snr_calc()
         self.static_canvas.draw()
-        #self.find_extrem()
+        # self.opt_rec.find_peaks_()
+        # self.find_extrem()
         # self.find_extrem()
 
     def retranslateUi(self, MainWindow):
