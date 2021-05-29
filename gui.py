@@ -292,6 +292,7 @@ class Ui_MainWindow(object):
         self.sig.periods = int(self.periods_text.text())
         self.sig.u = float(self.u_text.text())
         self.sig.freq = float(self.freq_text.text())
+        self.sig.bc = self.balanced_codes_chb.isChecked()
         try:
             self.sig.polys = ast.literal_eval(self.poly_text.text())
         except:

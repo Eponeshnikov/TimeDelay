@@ -30,6 +30,7 @@ class SigSource:
         self.polys = []
         self.poly = []
         self.state = []
+        self.bc = 0
 
     def rect(self):
         x, step = np.linspace(0, self.periods, 1000, retstep=True)
@@ -112,22 +113,27 @@ class SigSource:
             curr_state = next_state
             res_state.append(curr_state[0])
             L -= 1
-        res_state = res_state
         return res_state
 
     def gen_M_seq(self):
         ms = []
+        bc = self.bc
         self.gen_balanced_state()
         for i, poly in enumerate(self.polys):
             self.poly = poly
             if len(self.state) == 0:
                 state = self.gen_state()
+                if bc:
+                    if i == 0:
+                        state = self.gen_balanced_state()
+                    elif i == 1:
+                        state[0] = 0
             else:
                 state = self.state[i]
             ms.append(self.M_gen(state))
         return ms
 
-    '''def gen_balanced_state(self):
+    def gen_balanced_state(self):
         main_poly = self.polys[0]
         for poly in self.polys:
             if len(poly) < len(main_poly):
@@ -142,20 +148,24 @@ class SigSource:
             g[i] = f[i] * (i + 1)
         g = np.mod(g, 2)
 
-        g_pow = 0
-        for i in range(1, len(g)):
-            if g[i] != 0:
-                g_pow = i
-        if g_pow != 0:
-            zer = np.zeros(g_pow)
-            f = np.append(f, zer)
-            g = np.append(g, zer)
-        
+        seq_ids = []
+
         while len(f) > 1:
             xor = np.logical_xor(g, f)
-            xor = xor.astype(np.int)'''
-
-
+            xor = xor.astype(np.int)
+            a = 0
+            while xor[a] == 0:
+                a += 1
+            seq_ids.append(a)
+            g = g[:len(g) - a]
+            f = f[a:]
+        for i in range(1, len(seq_ids)):
+            seq_ids[i] = seq_ids[i - 1] + seq_ids[i]
+        seq_ids = np.array(seq_ids)
+        seq_ids -= 1
+        seq = np.zeros(max(main_poly))
+        seq[seq_ids] = 1
+        return np.flip(seq)
 
     def gold_code(self, ms):
         code = np.logical_xor(ms[0], ms[1])
