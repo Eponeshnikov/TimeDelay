@@ -42,16 +42,22 @@ class OptReceiver:
         # Decompose into wavelet components, to the level selected:
         coeffs = pywt.wavedec(data, 'sym4', level=maxlev)
         # cA = pywt.threshold(cA, threshold*max(cA))
+        # plt.figure()
         for i in range(1, len(coeffs)):
             # plt.subplot(maxlev, 1, i)
             # plt.plot(coeffs[i])
             coeffs[i] = pywt.threshold(coeffs[i], threshold * max(coeffs[i]))
             # plt.plot(coeffs[i])
         datarec = pywt.waverec(coeffs, 'sym4')
+        # plt.grid()
+        # plt.show()
         return datarec
 
     def gen_border(self):
-        conv = np.correlate(self.h, self.h, mode='full') / len(self.h)
+        zer = np.zeros(int(len(self.h) / 10))
+        h = np.append(zer, self.h)
+        h = np.append(h, zer)
+        conv = np.correlate(h, h, mode='full') / len(self.h)
         border = np.zeros(int(len(conv)))
         conv /= max(conv)
         peaks, _ = find_peaks(conv, distance=int(len(conv) / 20))
@@ -61,9 +67,12 @@ class OptReceiver:
         u_p = interp1d(index[peaks], conv[peaks], kind='quadratic', bounds_error=False, fill_value=0.0)
         for k in range(0, len(conv)):
             border[k] = u_p(k)
-        border += max(border)/15
+        border += max(border) / 15
         border /= max(border)
         border = np.where(border > 0.1, border, 0.1)
+        '''plt.plot(border)
+        plt.grid()
+        plt.show()'''
         # params = {'sid_ratio': sid_ratio, 'conv': conv}
         return border
 
@@ -72,12 +81,23 @@ class OptReceiver:
         if threshold > 0.6:
             threshold = 0.6
         denoised = self.denoise(self.matched_fil(), threshold)
+        '''plt.figure()
+        plt.plot(denoised)
+        plt.grid()'''
+        plt.show()
         denoised_copy = np.copy(denoised)
         index = np.arange(len(denoised))
-        height = self.gen_min_height() * 3
+        height = self.gen_min_height() * 2.5
+        extr_x = argrelextrema(denoised, np.greater)
+        extr_y = denoised[extr_x]
         peaks, _ = find_peaks(denoised, height=height)
         peaks_y = denoised[peaks]
         peaks_x = index[peaks]
+        '''plt.plot(denoised)
+        plt.plot(peaks_x, peaks_y, 'x')
+
+        plt.grid()
+        plt.show()'''
         peaks_zer = np.zeros(len(denoised))
         peaks_zer[peaks_x] = peaks_y
         all_peaks_x = []
@@ -87,7 +107,6 @@ class OptReceiver:
 
         while np.sum(peaks_y) != 0:
             den_sum = np.sum(np.abs(denoised))
-            print(den_sum)
             border = self.gen_border()
             # print('sid_ratio:', params['sid_ratio'])
             max_peak_x = peaks_x[np.argmax(peaks_y)]
@@ -108,7 +127,7 @@ class OptReceiver:
             border -= max(border) / 1000
 
             borders_y.append(border[border_left_x:border_right_x])
-            tmp_denoised = denoised[left_x:right_x]
+            tmp_denoised = peaks_zer[left_x:right_x]
             tmp_denoised = np.where(tmp_denoised > 0, tmp_denoised, 0)
             tmp_x = np.arange(left_x, right_x)
             borders_x.append(tmp_x)
@@ -120,18 +139,20 @@ class OptReceiver:
                 for i, peak in enumerate(tmp_peaks_x):
                     condition = np.abs(tmp_denoised[peak] / max(tmp_denoised)
                                        - border[border_left_x:border_right_x][peak] / max(tmp_denoised))
-                    if condition < 0.2 and tmp_denoised[peak] != max(tmp_denoised[tmp_peaks_x]):
+                    if condition < 0.15 and tmp_denoised[peak] != max(tmp_denoised[tmp_peaks_x]) \
+                            or tmp_denoised[peak] < height:
                         for_del.append(i)
                 for_del = np.array(for_del)
-                tmp_peaks_x = np.delete(tmp_peaks_x, for_del)
+                if len(for_del) > 0:
+                    tmp_peaks_x = np.delete(tmp_peaks_x, for_del)
 
                 if len(tmp_peaks_x) > 2:
                     print('second')
                     diffs_x = np.diff(tmp_peaks_x)
                     for_del_diff = []
-                    max_point = np.argmax(tmp_denoised[tmp_peaks_x])
+                    max_point = np.argmax(tmp_denoised)
                     for i in range(len(diffs_x)):
-                        if diffs_x[i] <= 200:
+                        if diffs_x[i] <= 100:
                             for_del_diff.append(i)
                             for_del_diff.append(i + 1)
                     if len(for_del_diff) > 1:
@@ -150,14 +171,16 @@ class OptReceiver:
             plt.plot(tmp_x, tmp_denoised)
             plt.plot(tmp_x[tmp_peaks_x], tmp_denoised[tmp_peaks_x], 'x')'''
             peaks_y[np.where((right_x > peaks_x) & (peaks_x > left_x))] = 0
-            denoised[left_x:right_x] = 0
+            peaks_zer[left_x:right_x] = 0
             # plt.savefig('signals/' + str(len(all_peaks_x)) + '.png')
             print('-' * 10)
-            if (den_sum - np.sum(np.abs(denoised)))/den_sum < 0.2:
-                break
+            '''if (den_sum - np.sum(np.abs(denoised))) / den_sum < 0.2:
+                break'''
 
         all_peaks_x = np.array(all_peaks_x)
+        '''plt.hist(all_peaks_y)
+        plt.show()'''
         '''plt.plot(index, denoised_copy)
         plt.plot(all_peaks_x, all_peaks_y, 'x')
         plt.show()'''
-        return all_peaks_x, borders_x, borders_y
+        return all_peaks_x, borders_x, borders_y, height

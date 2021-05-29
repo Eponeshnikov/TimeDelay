@@ -83,6 +83,8 @@ class SigSource:
         state = np.empty(length)
         for s in range(length):
             state[s] = np.random.randint(2)
+        if np.sum(state) == 0:
+            state[0] = 1
         return state
 
     def M_gen(self, state, L=None):
@@ -113,8 +115,9 @@ class SigSource:
         res_state = res_state
         return res_state
 
-    def gold_code(self, pair=False):
+    def gen_M_seq(self):
         ms = []
+        self.gen_balanced_state()
         for i, poly in enumerate(self.polys):
             self.poly = poly
             if len(self.state) == 0:
@@ -122,9 +125,50 @@ class SigSource:
             else:
                 state = self.state[i]
             ms.append(self.M_gen(state))
+        return ms
+
+    '''def gen_balanced_state(self):
+        main_poly = self.polys[0]
+        for poly in self.polys:
+            if len(poly) < len(main_poly):
+                main_poly = poly
+        main_poly = np.flip(main_poly)
+        f = np.zeros(max(main_poly) + 1)
+        f[main_poly] = 1
+        f[0] = 1
+
+        g = np.zeros(len(f))
+        for i in range(len(f)):
+            g[i] = f[i] * (i + 1)
+        g = np.mod(g, 2)
+
+        g_pow = 0
+        for i in range(1, len(g)):
+            if g[i] != 0:
+                g_pow = i
+        if g_pow != 0:
+            zer = np.zeros(g_pow)
+            f = np.append(f, zer)
+            g = np.append(g, zer)
+        
+        while len(f) > 1:
+            xor = np.logical_xor(g, f)
+            xor = xor.astype(np.int)'''
+
+
+
+    def gold_code(self, ms):
         code = np.logical_xor(ms[0], ms[1])
         code = code.astype(np.float)
         return code
+
+    def check_balanced(self, code):
+        ones = len(np.where(code == 1)[0])
+        zer = len(np.where(code == 0)[0])
+        balanced = 0
+        if np.abs(ones - zer) == 1:
+            balanced = 1
+        return balanced
 
     def generate_sig(self):
         sig_X, sig_Y, step = 0, 0, 0
@@ -133,6 +177,6 @@ class SigSource:
         elif self.modulation == 'Radio Sig':
             sig_X, sig_Y, step = self.radio_sig()
         elif self.modulation == 'Gold':
-            sig_X, sig_Y, step = self.radio_sig(self.gold_code())
+            sig_X, sig_Y, step = self.radio_sig(self.gold_code(self.gen_M_seq()))
         sig = (sig_X, sig_Y, step)
         return sig

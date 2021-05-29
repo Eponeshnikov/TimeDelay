@@ -194,11 +194,13 @@ def add_delays(sig, ts, us, dt):
     plt.show()
     return del_sig
 
-
+'''
 sign_x, signy, dt = rect(0.2)
 ts = gen_delays(400, 2)
-us = gen_amps(100, 100, 2.7, ts, 2000, 9)
-#add_delays(signy, ts, us,dt)
+us = gen_amps(100, 100, 2.7, ts, 2000, 9)'''
+
+
+# add_delays(signy, ts, us,dt)
 
 
 def test():
@@ -210,16 +212,24 @@ def test():
     plt.show()
 
 
-#test()
+# test()
 def H():
     from scipy.special import gamma
     k = np.linspace(1, 5, 100)
-    s_sum_x = np.arange(1, max(k)-1)
-    sum_s = np.sum(1/s_sum_x - 0.577)
-    res = 1/np.log(2)*(k + np.log(2000/30) + gamma(k) + (k+1)*sum_s)
+    s_sum_x = np.arange(1, max(k) - 1)
+    sum_s = np.sum(1 / s_sum_x - 0.577)
+    res = 1 / np.log(2) * (k + np.log(2000 / 30) + gamma(k) + (k + 1) * sum_s)
     plt.plot(k, res)
     plt.grid()
     plt.xlabel('k')
     plt.ylabel('H(k)')
     plt.show()
-#H()
+
+
+def check_balanced():
+    d = {'0':1, '3':2, 2:3}
+    for i in d:
+        print(d[i])
+check_balanced()
+
+# H()

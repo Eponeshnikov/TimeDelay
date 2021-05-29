@@ -60,6 +60,7 @@ class Ui_MainWindow(object):
         self.peaks_x = None
         self.border_x = None
         self.border_y = None
+        self.height = 0
         self.dt = None
         self.ts = None
         self.us = None
@@ -284,7 +285,7 @@ class Ui_MainWindow(object):
         self.init_axes()
 
         self.plot_sig_btn.clicked.connect(self.show_signal)
-        self.calc_btn.clicked.connect(self.L_iter)
+        self.calc_btn.clicked.connect(self.iter_params)
 
     def read_sig_info(self):
         self.sig.modulation = str(self.modulation_cb.currentText())
@@ -324,7 +325,8 @@ class Ui_MainWindow(object):
     def gen_delays(self):
         self.ts = self.phys_channel.gen_delays(uniform=self.uni_distr_chb.isChecked(),
                                                direct_ray=self.direct_ray_chb.isChecked())
-        self.us = self.phys_channel.gen_amps(self.ts, rand=not self.no_rand_u_chb.isChecked())
+        self.us = self.phys_channel.gen_amps(self.ts, rand=not self.no_rand_u_chb.isChecked(),
+                                             direct_ray=self.direct_ray_chb.isChecked())
 
         self.opt_rec.us = np.copy(self.us)
 
@@ -348,18 +350,27 @@ class Ui_MainWindow(object):
         self.opt_rec.h = self.sig_y
         self.opt_rec.sig = self.sig_del_noise_y
         self.conv = self.opt_rec.matched_fil()
-        self.peaks_x, self.border_x, self.border_y = self.opt_rec.find_peaks_()
+        try:
+            self.peaks_x, self.border_x, self.border_y, self.height = self.opt_rec.find_peaks_()
+        except Exception as e:
+            print(e)
 
     def plot_conv(self):
-        sig_x = self.sig_del_noise_x
-        sig_y = np.abs(self.conv)
+        sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
+        sig_y = np.append(np.abs(self.conv), np.zeros(1))
 
         # print(np.average(self.conv), np.std(self.conv, ddof=1))
         try:
             peaks_x = self.peaks_x
+            for i in range(len(self.border_x)):
+                border_x = self.border_x[i]
+                border_y = self.border_y[i]
+                border_x = sig_x[border_x]
+                self.axes[1][0].plot(border_x, border_y, color='g')
             peaks_y = sig_y[peaks_x]
-            peaks_x = self.sig_del_noise_x[peaks_x]
-            self.axes[1][0].plot(peaks_x, peaks_y, 'x', color='r')
+            peaks_x = sig_x[peaks_x]
+            self.axes[1][0].plot(peaks_x, peaks_y, 'ob', color='r')
+            self.axes[1][0].hlines(y=self.height, xmin=0, xmax=max(sig_x), color='grey', linestyle='dashed')
         except Exception as e:
             print(e)
         self.axes[1][0].plot(sig_x, sig_y)
@@ -420,58 +431,10 @@ class Ui_MainWindow(object):
             code_copy = self.shift_code(code_copy)
         return res
 
-    def L_iter(self):
-        self.read_sig_info()
-        self.read_ph_ch_info()
-        self.gen_sig()
-        pos = []
-        for i in range(100):
-            self.gen_delays()
-            self.gen_del_noise_sig()
-            self.gen_conv()
-            pos.append(self.sig_del_noise_x[np.argmax(self.conv)])
-        self.snr_calc()
-        pos = np.array(pos)
-        print(pos.mean())
-        print(pos.var())
-        print()
-        '''self.read_sig_info()
-        self.read_ph_ch_info()
-        codes = self.sig.gold_code(pair=False)
-        print(codes)
-        res = self.bin_conv(codes)
-        plt.plot(res)
-        plt.show()'''
-        '''a = codes[0]
-        b = codes[1]
-        b_copy = np.copy(b)
-        fig, ax = plt.subplots(nrows=2, ncols=1)
-        codes = []
-        for i in range(1):
-            b = b_copy
-            for j in range(len(b)):
-                code = np.logical_xor(a, b)
-                code = code.astype(np.float)
-                codes.append(code)
-                self.sig_x, self.sig_y, self.dt = self.sig.radio_sig(code)
-                conv = np.abs(np.convolve(self.sig_y, self.sig_y, mode='same')) ** 2
-                ax[0].clear()
-                ax[1].clear()
-                ax[0].grid()
-                ax[1].grid()
-                # ax[0].plot(self.sig_x, self.sig_y)
-
-                # ax[0].set_xlabel('t, us')
-                # ax[1].set_xlabel('t, us')
-                # ax[1].plot(self.sig_x, conv)
-
-                # plt.show()
-                # fig.savefig('signals/' + str(i) + '_' + str(j) + '.png')
-                b = self.shift_code(b)
-            a = self.shift_code(a)
-        cov = np.cov(codes)
-        plt.plot(cov[0])
-        plt.show()'''
+    def iter_params(self):
+        #iters: modulation, if (rad sig) periods, freq, modparams[freq, n], if (gold) poly and state, diffusers, dist, noise_u, dir_ray, A0, r0, n, scale, sigma, uniform_dist, no rand
+        #out data: snr, real rays, finded rays, if(gold) balanced_code
+        pass
 
     def show_signal(self):
         self.static_canvas.figure.clear()
@@ -492,9 +455,7 @@ class Ui_MainWindow(object):
         self.plot_spec()
         snr = self.snr_calc()
         self.static_canvas.draw()
-        # self.opt_rec.find_peaks_()
-        # self.find_extrem()
-        # self.find_extrem()
+
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
