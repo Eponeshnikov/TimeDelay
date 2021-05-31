@@ -229,7 +229,7 @@ def H():
 def check_balanced():
     d = {'0':1, '3':2, 2:3}
     for i in d:
-        print(d[i])
+        print(i)
 check_balanced()
 
 # H()

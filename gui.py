@@ -19,6 +19,15 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import ast
 import numpy as np
+from collections import defaultdict
+
+
+def list_duplicates(seq):
+    tally = defaultdict(list)
+    for i, item in enumerate(seq):
+        tally[item].append(i)
+    return ((key, locs) for key, locs in tally.items()
+            if len(locs) > 1)
 
 
 class Ui_MainWindow(object):
@@ -52,18 +61,27 @@ class Ui_MainWindow(object):
         self.sig = SigSource()
         self.phys_channel = PhysChannel()
         self.opt_rec = OptReceiver()
+
         self.sig_y = None
         self.sig_x = None
         self.sig_del_noise_y = None
         self.sig_del_noise_x = None
+
         self.conv = None
         self.peaks_x = None
+        self.peaks_y = None
+        self.right_peaks = None
+        self.false_peaks = None
+        self.lost_peaks = None
         self.border_x = None
         self.border_y = None
         self.height = 0
+        self.snrs2plot = None
+
         self.dt = None
         self.ts = None
         self.us = None
+        self.snrs = None
 
         self.sig_source_lb = QtWidgets.QLabel(self.centralwidget)
         self.sig_source_lb.setGeometry(QtCore.QRect(20, 10, 120, 20))
@@ -228,6 +246,24 @@ class Ui_MainWindow(object):
         self.balanced_codes_chb = QtWidgets.QCheckBox(self.centralwidget)
         self.balanced_codes_chb.setGeometry(QtCore.QRect(160, 125, 41, 20))
         self.balanced_codes_chb.setObjectName("balanced_codes_chb")
+        self.border_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.border_chb.setGeometry(QtCore.QRect(550, 640, 81, 20))
+        self.border_chb.setObjectName("border_chb")
+        self.right_rays_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.right_rays_chb.setGeometry(QtCore.QRect(620, 640, 81, 20))
+        self.right_rays_chb.setObjectName("right_rays_chb")
+        self.false_rays_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.false_rays_chb.setGeometry(QtCore.QRect(710, 640, 81, 20))
+        self.false_rays_chb.setObjectName("false_rays_chb")
+        self.lost_rays_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.lost_rays_chb.setGeometry(QtCore.QRect(800, 640, 81, 20))
+        self.lost_rays_chb.setObjectName("lost_rays_chb")
+        self.real_rays_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.real_rays_chb.setGeometry(QtCore.QRect(880, 640, 81, 20))
+        self.real_rays_chb.setObjectName("real_rays_chb")
+        self.snr_show_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.snr_show_chb.setGeometry(QtCore.QRect(960, 640, 91, 20))
+        self.snr_show_chb.setObjectName("snr_show_chb")
 
         self.init_gui_elements()
 
@@ -276,6 +312,11 @@ class Ui_MainWindow(object):
         self.noise_chb.setChecked(True)
         self.delays_chb.setChecked(True)
         self.orig_sig_spec_rb.setChecked(True)
+        self.right_rays_chb.setChecked(True)
+        self.false_rays_chb.setChecked(True)
+        self.lost_rays_chb.setChecked(True)
+        self.snr_show_chb.setChecked(True)
+        self.border_chb.setChecked(True)
 
         self.preview_plt.setBackground('w')
         self.preview_plt.setFixedSize(180, 145)
@@ -351,30 +392,123 @@ class Ui_MainWindow(object):
         self.opt_rec.h = self.sig_y
         self.opt_rec.sig = self.sig_del_noise_y
         self.conv = self.opt_rec.matched_fil()
-        try:
-            self.peaks_x, self.border_x, self.border_y, self.height = self.opt_rec.find_peaks_()
-        except Exception as e:
-            print(e)
+
+    def gen_peaks(self):
+        self.peaks_x, self.border_x, self.border_y, self.height = self.opt_rec.find_peaks_()
+        sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
+        sig_len = len(self.sig_x) * self.dt
+        peaks_x = sig_x[self.peaks_x] - sig_len / 2
+        peaks_x = np.sort(peaks_x)
+        matr = []
+        for peak in peaks_x:
+            matr.append(np.abs(self.ts - peak))
+        diffs = np.zeros(len(peaks_x))
+        diffs_ids = []
+        for i in range(len(peaks_x)):
+            diffs[i] = min(matr[i])
+            id = (i, np.argmin(matr[i]))
+            diffs_ids.append(id)
+        diff_len = len(diffs_ids)
+        right_j = []
+        diffs_ids_copy = diffs_ids.copy()
+        false_ids = []
+        for r in range(diff_len):
+            right_j.append(diffs_ids[r][1])
+
+        for dub in sorted(list_duplicates(right_j)):
+            for_compare = []
+            for ind in dub[1]:
+                val2del = (diffs_ids_copy[ind][0], dub[0])
+                false_ids.append(val2del)
+                diffs_ids.remove(val2del)
+                for_compare.append(matr[diffs_ids_copy[ind][0]][dub[0]])
+            min_el = np.argmin(for_compare)
+            val = (dub[1][min_el], dub[0])
+            false_ids.remove(val)
+            diffs_ids.insert(dub[0], val)
+        right_peaks_ids = []
+        real_peaks_ids = []
+        false_peaks_ids = []
+        lost_peaks_ref = np.arange(len(self.ts))
+        lost_peaks_ids = []
+        for d in diffs_ids:
+            right_peaks_ids.append(d[0])
+            real_peaks_ids.append(d[1])
+        for f in false_ids:
+            false_peaks_ids.append(f[0])
+
+        real_peaks_ids = np.array(real_peaks_ids)
+
+        for peak in lost_peaks_ref:
+            if len(np.where(real_peaks_ids == peak)[0]) == 0:
+                lost_peaks_ids.append(peak)
+
+        self.right_peaks = [[], []]
+        self.false_peaks = [[], []]
+        self.lost_peaks = [[], []]
+
+        sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
+        sig_y = np.append(np.abs(self.conv), np.zeros(1))
+
+        peaks_x = self.peaks_x
+        peaks_x = np.sort(peaks_x)
+        peaks_y = sig_y[peaks_x]
+        peaks_x = sig_x[peaks_x]
+        self.peaks_x = peaks_x
+        self.peaks_y = peaks_y
+        self.snrs2plot = self.snrs[real_peaks_ids]
+        self.lost_peaks[0] = self.ts[lost_peaks_ids] + sig_len / 2
+        self.lost_peaks[1] = self.us[lost_peaks_ids] / max(self.us) * max(self.conv)
+        self.right_peaks[0] = peaks_x[right_peaks_ids]
+        self.right_peaks[1] = peaks_y[right_peaks_ids]
+        self.false_peaks[0] = peaks_x[false_peaks_ids]
+        self.false_peaks[1] = peaks_y[false_peaks_ids]
+
+    def gen_borders(self):
+        sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
+        mid_b = []
+        for i, border in enumerate(self.border_x):
+            mid_b.append(border[np.argmax(self.border_y[i])])
+        for i in range(len(self.border_x)):
+            border_x = self.border_x[i]
+            border_x = sig_x[border_x]
+            self.border_x[i] = border_x
+            self.border_y[i] /= max(self.border_y[i])
+            self.border_y[i] *= np.abs(self.conv[mid_b[i]])
 
     def plot_conv(self):
         sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
         sig_y = np.append(np.abs(self.conv), np.zeros(1))
-
-        # print(np.average(self.conv), np.std(self.conv, ddof=1))
-        try:
-            peaks_x = self.peaks_x
-            for i in range(len(self.border_x)):
-                border_x = self.border_x[i]
-                border_y = self.border_y[i]
-                border_x = sig_x[border_x]
-                self.axes[1][0].plot(border_x, border_y, color='g')
-            peaks_y = sig_y[peaks_x]
-            peaks_x = sig_x[peaks_x]
-            self.axes[1][0].plot(peaks_x, peaks_y, 'ob', color='r')
-            self.axes[1][0].hlines(y=self.height, xmin=0, xmax=max(sig_x), color='grey', linestyle='dashed')
-        except Exception as e:
-            print(e)
         self.axes[1][0].plot(sig_x, sig_y)
+
+    def plot_peaks(self):
+        if self.false_rays_chb.isChecked():
+            self.axes[1][0].plot(self.false_peaks[0], self.false_peaks[1], 'o', color='r')
+        if self.right_rays_chb.isChecked():
+            self.axes[1][0].plot(self.right_peaks[0], self.right_peaks[1], 'vb', color='limegreen')
+            if self.snr_show_chb.isChecked():
+                for i in range(len(self.right_peaks[0])):
+                    an = str(np.round(self.snrs2plot[i], 2)) + ' dB'
+                    y = self.right_peaks[1][i] * 1.05
+                    if y > max(self.right_peaks[1]):
+                        y = self.right_peaks[1][i] * 1.01
+                    self.axes[1][0].annotate(an, xy=(self.right_peaks[0][i], y))
+        if self.real_rays_chb.isChecked():
+            sig_len = len(self.sig_x) * self.dt
+            self.axes[1][0].plot(self.ts + sig_len / 2, self.us / max(self.us) * max(self.conv), 'd', color='gold')
+            self.axes[1][0].vlines(x=self.ts + sig_len / 2, ymin=0, ymax=self.us / max(self.us) * max(self.conv),
+                                   color='gold')
+        if self.lost_rays_chb.isChecked():
+            self.axes[1][0].plot(self.lost_peaks[0], self.lost_peaks[1], 'X', color='indigo')
+            self.axes[1][0].vlines(x=self.lost_peaks[0], ymin=0, ymax=self.lost_peaks[1], color='indigo')
+
+    def plot_borders(self):
+        sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
+        if self.border_chb.isChecked():
+            for i in range(len(self.border_x)):
+                self.axes[1][0].plot(self.border_x[i], self.border_y[i], color='orange', linestyle='dashdot')
+
+            self.axes[1][0].hlines(y=self.height, xmin=0, xmax=max(sig_x), color='grey', linestyle='dashed')
 
     def plot_del_noise_sig(self):
         sig2plot_x, sig2plot_y = self.sig_del_noise_x, self.sig_del_noise_y
@@ -403,15 +537,14 @@ class Ui_MainWindow(object):
         self.axes[1][1].plot(sig_fft_x, sig_fft_y / max(sig_fft_y))
 
     def snr_calc(self):
-        import numpy as np
         n1s = []
         for u in self.us:
             n1 = np.var(self.sig_y * u, ddof=1)
             n1s.append(n1)
         n1s = np.array(n1s)
         n2 = self.phys_channel.noise_u ** 2
+        self.snrs = 10 * np.log10(n1s / n2)
         print('SNR:', 10 * np.log10(n1s / n2))
-        return n1s / n2
 
     def shift_code(self, code):
         res = np.roll(code, 1)
@@ -432,9 +565,12 @@ class Ui_MainWindow(object):
             code_copy = self.shift_code(code_copy)
         return res
 
+    def read_config(self):
+        pass
+
     def iter_params(self):
-        #iters: modulation, if (rad sig) periods, freq, modparams[freq, n], if (gold) poly and state, diffusers, dist, noise_u, dir_ray, A0, r0, n, scale, sigma, uniform_dist, no rand
-        #out data: snr, real rays, finded rays, if(gold) balanced_code
+        # iters: modulation, if (rad sig) periods, freq, modparams[freq, n], if (gold) poly and state, diffusers, dist, noise_u, dir_ray, A0, r0, n, scale, sigma, uniform_dist, no rand
+        # out data: snr, real rays, finded rays, if(gold) balanced_code
         pass
 
     def show_signal(self):
@@ -449,14 +585,23 @@ class Ui_MainWindow(object):
         self.gen_delays()
         self.gen_del_noise_sig()
         self.gen_conv()
+        self.snr_calc()
+        '''try:'''
+        self.gen_peaks()
+        self.gen_borders()
+        '''except Exception as e:
+            print(e)'''
         self.plot_delays()
         self.plot_sig()
         self.plot_del_noise_sig()
         self.plot_conv()
+        '''try:'''
+        self.plot_peaks()
+        self.plot_borders()
+        '''except Exception as e:
+            print(e)'''
         self.plot_spec()
-        snr = self.snr_calc()
         self.static_canvas.draw()
-
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -491,6 +636,12 @@ class Ui_MainWindow(object):
         self.orig_sig_spec_rb.setText(_translate("MainWindow", "Orig. spec."))
         self.del_noise_spec_rb.setText(_translate("MainWindow", "DN"))
         self.balanced_codes_chb.setText(_translate("MainWindow", "BC"))
+        self.border_chb.setText(_translate("MainWindow", "Border"))
+        self.right_rays_chb.setText(_translate("MainWindow", "True rays"))
+        self.false_rays_chb.setText(_translate("MainWindow", "False rays"))
+        self.lost_rays_chb.setText(_translate("MainWindow", "Lost rays"))
+        self.real_rays_chb.setText(_translate("MainWindow", "Real rays"))
+        self.snr_show_chb.setText(_translate("MainWindow", "Show SNR"))
 
 
 if __name__ == "__main__":

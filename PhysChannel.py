@@ -62,6 +62,6 @@ class PhysChannel:
                 y = np.random.normal(0, self.sigma, size=1)
                 alpha = 10 ** (y / 20)
                 us[u] *= alpha
-        return us
+        return np.array(us)
 
 

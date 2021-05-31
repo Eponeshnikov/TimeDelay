@@ -628,6 +628,84 @@
      <string>BC</string>
     </property>
    </widget>
+   <widget class="QCheckBox" name="border_chb">
+    <property name="geometry">
+     <rect>
+      <x>550</x>
+      <y>640</y>
+      <width>81</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Border</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="right_rays_chb">
+    <property name="geometry">
+     <rect>
+      <x>620</x>
+      <y>640</y>
+      <width>81</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>True rays</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="false_rays_chb">
+    <property name="geometry">
+     <rect>
+      <x>710</x>
+      <y>640</y>
+      <width>81</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>False rays</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="lost_rays_chb">
+    <property name="geometry">
+     <rect>
+      <x>800</x>
+      <y>640</y>
+      <width>81</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Lost rays</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="real_rays_chb">
+    <property name="geometry">
+     <rect>
+      <x>880</x>
+      <y>640</y>
+      <width>81</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Real rays</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="snr_show_chb">
+    <property name="geometry">
+     <rect>
+      <x>960</x>
+      <y>640</y>
+      <width>91</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Show SNR</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">

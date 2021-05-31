@@ -176,7 +176,7 @@ class OptReceiver:
             print('-' * 10)
             '''if (den_sum - np.sum(np.abs(denoised))) / den_sum < 0.2:
                 break'''
-
+        all_peaks_x = list(set(all_peaks_x))
         all_peaks_x = np.array(all_peaks_x)
         '''plt.hist(all_peaks_y)
         plt.show()'''
