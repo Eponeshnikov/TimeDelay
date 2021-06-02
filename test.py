@@ -230,6 +230,8 @@ def check_balanced():
     d = {'0':1, '3':2, 2:3}
     for i in d:
         print(i)
+        print(d[i])
 check_balanced()
+#print(np.arange(100,101,100))
 
 # H()

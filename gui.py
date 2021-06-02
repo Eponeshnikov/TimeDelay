@@ -73,15 +73,23 @@ class Ui_MainWindow(object):
         self.right_peaks = None
         self.false_peaks = None
         self.lost_peaks = None
+        self.real_right_peaks = None
+        self.finded_ids = None
+        self.lost_ids = None
         self.border_x = None
         self.border_y = None
         self.height = 0
-        self.snrs2plot = None
 
         self.dt = None
         self.ts = None
         self.us = None
         self.snrs = None
+        self.snrs_finded = None
+        self.snrs_lost = None
+
+        self.sig_fft_y = None
+        self.sig_fft_x = None
+        self.spec_w = None
 
         self.sig_source_lb = QtWidgets.QLabel(self.centralwidget)
         self.sig_source_lb.setGeometry(QtCore.QRect(20, 10, 120, 20))
@@ -186,11 +194,8 @@ class Ui_MainWindow(object):
         self.u_lb = QtWidgets.QLabel(self.centralwidget)
         self.u_lb.setGeometry(QtCore.QRect(20, 70, 21, 16))
         self.u_lb.setObjectName("u_lb")
-        self.conf_btn = QtWidgets.QToolButton(self.centralwidget)
-        self.conf_btn.setGeometry(QtCore.QRect(120, 640, 27, 22))
-        self.conf_btn.setObjectName("conf_btn")
         self.conf_text = QtWidgets.QLineEdit(self.centralwidget)
-        self.conf_text.setGeometry(QtCore.QRect(60, 640, 51, 22))
+        self.conf_text.setGeometry(QtCore.QRect(60, 640, 91, 22))
         self.conf_text.setObjectName("conf_text")
         self.mod_param_lb = QtWidgets.QLabel(self.centralwidget)
         self.mod_param_lb.setGeometry(QtCore.QRect(20, 150, 70, 16))
@@ -234,9 +239,6 @@ class Ui_MainWindow(object):
         self.sigma_text = QtWidgets.QLineEdit(self.centralwidget)
         self.sigma_text.setGeometry(QtCore.QRect(130, 370, 31, 22))
         self.sigma_text.setObjectName("sigma_text")
-        self.apply_btn = QtWidgets.QPushButton(self.centralwidget)
-        self.apply_btn.setGeometry(QtCore.QRect(16, 640, 41, 22))
-        self.apply_btn.setObjectName("apply_btn")
         self.orig_sig_spec_rb = QtWidgets.QRadioButton(self.centralwidget)
         self.orig_sig_spec_rb.setGeometry(QtCore.QRect(70, 125, 95, 20))
         self.orig_sig_spec_rb.setObjectName("orig_sig_spec_rb")
@@ -264,6 +266,9 @@ class Ui_MainWindow(object):
         self.snr_show_chb = QtWidgets.QCheckBox(self.centralwidget)
         self.snr_show_chb.setGeometry(QtCore.QRect(960, 640, 91, 20))
         self.snr_show_chb.setObjectName("snr_show_chb")
+        self.save_chb = QtWidgets.QCheckBox(self.centralwidget)
+        self.save_chb.setGeometry(QtCore.QRect(5, 640, 81, 20))
+        self.save_chb.setObjectName("save_chb")
 
         self.init_gui_elements()
 
@@ -280,20 +285,23 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def init_axes(self):
-        self.static_canvas.figure.subplots_adjust(left=0.075, right=0.985, top=0.970, bottom=0.110, hspace=0.320,
+        self.static_canvas.figure.subplots_adjust(left=0.06, right=0.985, top=0.955, bottom=0.110, hspace=0.320,
                                                   wspace=0.200)
         self.axes[0][0].set_xlabel('t, us')
         self.axes[0][0].set_ylabel('U, μV')
         self.axes[0][0].grid()
+        self.axes[0][0].set_title('Noisy signal')
         self.axes[1][0].set_xlabel('t, us')
         self.axes[1][0].set_ylabel('|h(t)|')
         self.axes[1][0].grid()
+        self.axes[1][0].set_title('Response of correlation receiver')
         self.axes[0][1].set_xlabel('t, us')
         self.axes[0][1].set_ylabel('U, μV')
         self.axes[0][1].grid()
+        self.axes[0][1].set_title('Reference signal')
         self.axes[1][1].set_xlabel('f, MHz')
-        # self.axes[1][1].set_ylabel('U, μV')
         self.axes[1][1].grid()
+        self.axes[1][1].set_title('Spectrum')
 
     def init_gui_elements(self):
         self.modulation_cb.addItems(['Gold', 'Radio Sig', 'Rect'])
@@ -330,7 +338,9 @@ class Ui_MainWindow(object):
 
     def read_sig_info(self):
         self.sig.modulation = str(self.modulation_cb.currentText())
-        self.sig.periods = int(self.periods_text.text())
+        self.sig.periods = float(self.periods_text.text())
+        if self.sig.modulation != 'Rect':
+            self.sig.periods = int(self.sig.periods)
         self.sig.u = float(self.u_text.text())
         self.sig.freq = float(self.freq_text.text())
         self.sig.bc = self.balanced_codes_chb.isChecked()
@@ -358,17 +368,21 @@ class Ui_MainWindow(object):
         self.phys_channel.sigma = float(self.sigma_text.text())
 
         self.opt_rec.noise_u = float(self.noise_u_text.text())
+        self.opt_rec.dev = self.dev_chb.isChecked()
+        self.opt_rec.save_fig = self.save_chb.isChecked()
 
     def gen_sig(self):
         self.sig_x, self.sig_y, self.dt = self.sig.generate_sig()
         self.phys_channel.sig = self.sig_y
         self.phys_channel.sig_step = self.dt
+        self.opt_rec.dt = self.dt
 
     def gen_delays(self):
-        self.ts = self.phys_channel.gen_delays(uniform=self.uni_distr_chb.isChecked(),
-                                               direct_ray=self.direct_ray_chb.isChecked())
-        self.us = self.phys_channel.gen_amps(self.ts, rand=not self.no_rand_u_chb.isChecked(),
-                                             direct_ray=self.direct_ray_chb.isChecked())
+        self.phys_channel.uniform = self.uni_distr_chb.isChecked()
+        self.phys_channel.dr = self.direct_ray_chb.isChecked()
+        self.phys_channel.rand = not self.no_rand_u_chb.isChecked()
+        self.ts = self.phys_channel.gen_delays()
+        self.us = self.phys_channel.gen_amps(self.ts)
 
         self.opt_rec.us = np.copy(self.us)
 
@@ -394,10 +408,12 @@ class Ui_MainWindow(object):
         self.conv = self.opt_rec.matched_fil()
 
     def gen_peaks(self):
+        if self.sig.modulation == 'Rect':
+            self.opt_rec.rect = True
         self.peaks_x, self.border_x, self.border_y, self.height = self.opt_rec.find_peaks_()
         sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
         sig_len = len(self.sig_x) * self.dt
-        peaks_x = sig_x[self.peaks_x] - sig_len / 2
+        peaks_x = sig_x[self.peaks_x.astype(np.int)] - sig_len / 2
         peaks_x = np.sort(peaks_x)
         matr = []
         for peak in peaks_x:
@@ -443,20 +459,30 @@ class Ui_MainWindow(object):
             if len(np.where(real_peaks_ids == peak)[0]) == 0:
                 lost_peaks_ids.append(peak)
 
+        # lost_peaks_ids = np.array(lost_peaks_ids)
         self.right_peaks = [[], []]
         self.false_peaks = [[], []]
         self.lost_peaks = [[], []]
+        self.real_right_peaks = [[], []]
 
         sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
         sig_y = np.append(np.abs(self.conv), np.zeros(1))
 
         peaks_x = self.peaks_x
         peaks_x = np.sort(peaks_x)
-        peaks_y = sig_y[peaks_x]
-        peaks_x = sig_x[peaks_x]
+        peaks_y = sig_y[peaks_x.astype(np.int)]
+        peaks_x = sig_x[peaks_x.astype(np.int)]
+        self.finded_ids = real_peaks_ids.astype(np.int)
+        self.lost_ids = np.array(lost_peaks_ids).astype(np.int)
+        if not self.phys_channel.dr:
+            self.finded_ids += 1
+            self.lost_ids += 1
         self.peaks_x = peaks_x
         self.peaks_y = peaks_y
-        self.snrs2plot = self.snrs[real_peaks_ids]
+        self.snrs_finded = self.snrs[real_peaks_ids.astype(np.int)]
+        self.snrs_lost = self.snrs[lost_peaks_ids]
+        self.real_right_peaks[0] = self.ts[real_peaks_ids.astype(np.int)] + sig_len / 2
+        self.real_right_peaks[1] = self.us[real_peaks_ids.astype(np.int)] / max(self.us) * max(self.conv)
         self.lost_peaks[0] = self.ts[lost_peaks_ids] + sig_len / 2
         self.lost_peaks[1] = self.us[lost_peaks_ids] / max(self.us) * max(self.conv)
         self.right_peaks[0] = peaks_x[right_peaks_ids]
@@ -476,6 +502,18 @@ class Ui_MainWindow(object):
             self.border_y[i] /= max(self.border_y[i])
             self.border_y[i] *= np.abs(self.conv[mid_b[i]])
 
+    def gen_spec(self):
+        sig_x, sig_y, dt = self.sig_x, self.sig_y, self.dt
+        if self.del_noise_spec_rb.isChecked():
+            sig_x, sig_y = self.sig_del_noise_x, self.sig_del_noise_y
+        sig_y = add_zer(sig_y)
+        self.sig_fft_y, self.sig_fft_x = spectrum(sig_y, dt)
+        self.sig_fft_y /= max(self.sig_fft_y)
+        ids = np.where(self.sig_fft_y > 0.5)[0]
+        x_s = self.sig_fft_x[ids]
+        x_s = np.sort(x_s)
+        self.spec_w = x_s[len(x_s) - 1] - x_s[0]
+
     def plot_conv(self):
         sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
         sig_y = np.append(np.abs(self.conv), np.zeros(1))
@@ -483,23 +521,24 @@ class Ui_MainWindow(object):
 
     def plot_peaks(self):
         if self.false_rays_chb.isChecked():
-            self.axes[1][0].plot(self.false_peaks[0], self.false_peaks[1], 'o', color='r')
+            self.axes[1][0].plot(self.false_peaks[0], self.false_peaks[1], 'o', color='r', label='False rays')
         if self.right_rays_chb.isChecked():
-            self.axes[1][0].plot(self.right_peaks[0], self.right_peaks[1], 'vb', color='limegreen')
+            self.axes[1][0].plot(self.right_peaks[0], self.right_peaks[1], 'vb', color='limegreen', label='True rays')
             if self.snr_show_chb.isChecked():
                 for i in range(len(self.right_peaks[0])):
-                    an = str(np.round(self.snrs2plot[i], 2)) + ' dB'
+                    an = str(np.round(self.snrs_finded[i], 2)) + ' dB'
                     y = self.right_peaks[1][i] * 1.05
                     if y > max(self.right_peaks[1]):
                         y = self.right_peaks[1][i] * 1.01
                     self.axes[1][0].annotate(an, xy=(self.right_peaks[0][i], y))
         if self.real_rays_chb.isChecked():
             sig_len = len(self.sig_x) * self.dt
-            self.axes[1][0].plot(self.ts + sig_len / 2, self.us / max(self.us) * max(self.conv), 'd', color='gold')
+            self.axes[1][0].plot(self.ts + sig_len / 2, self.us / max(self.us) * max(self.conv), 'd', color='gold',
+                                 label='Real rays')
             self.axes[1][0].vlines(x=self.ts + sig_len / 2, ymin=0, ymax=self.us / max(self.us) * max(self.conv),
                                    color='gold')
         if self.lost_rays_chb.isChecked():
-            self.axes[1][0].plot(self.lost_peaks[0], self.lost_peaks[1], 'X', color='indigo')
+            self.axes[1][0].plot(self.lost_peaks[0], self.lost_peaks[1], 'X', color='indigo', label='Lost rays')
             self.axes[1][0].vlines(x=self.lost_peaks[0], ymin=0, ymax=self.lost_peaks[1], color='indigo')
 
     def plot_borders(self):
@@ -507,8 +546,12 @@ class Ui_MainWindow(object):
         if self.border_chb.isChecked():
             for i in range(len(self.border_x)):
                 self.axes[1][0].plot(self.border_x[i], self.border_y[i], color='orange', linestyle='dashdot')
+                if i == 0:
+                    self.axes[1][0].plot(self.border_x[i], self.border_y[i], color='orange', linestyle='dashdot',
+                                         label='Border')
 
-            self.axes[1][0].hlines(y=self.height, xmin=0, xmax=max(sig_x), color='grey', linestyle='dashed')
+            self.axes[1][0].hlines(y=self.height, xmin=0, xmax=max(sig_x), color='grey', linestyle='dashed',
+                                   label='Threshold')
 
     def plot_del_noise_sig(self):
         sig2plot_x, sig2plot_y = self.sig_del_noise_x, self.sig_del_noise_y
@@ -529,12 +572,15 @@ class Ui_MainWindow(object):
             self.preview_plt.plot()
 
     def plot_spec(self):
-        sig_x, sig_y, dt = self.sig_x, self.sig_y, self.dt
-        if self.del_noise_spec_rb.isChecked():
-            sig_x, sig_y = self.sig_del_noise_x, self.sig_del_noise_y
-        sig_y = add_zer(sig_y)
-        sig_fft_y, sig_fft_x = spectrum(sig_y, dt)
-        self.axes[1][1].plot(sig_fft_x, sig_fft_y / max(sig_fft_y))
+        self.axes[1][1].plot(self.sig_fft_x, self.sig_fft_y)
+        left = self.sig.freq - self.spec_w * 3
+        if left < 0:
+            left = 0
+        right = self.sig.freq + self.spec_w * 3
+        self.axes[1][1].set_xlim([left, right])
+        self.axes[1][1].text(int(self.sig.freq + self.spec_w * 0.9), max(self.sig_fft_y) * 0.88,
+                             'Bandwidth: ' + str(np.round(self.spec_w)) + ' MHz',
+                             bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1'), fontsize=6)
 
     def snr_calc(self):
         n1s = []
@@ -544,34 +590,236 @@ class Ui_MainWindow(object):
         n1s = np.array(n1s)
         n2 = self.phys_channel.noise_u ** 2
         self.snrs = 10 * np.log10(n1s / n2)
-        print('SNR:', 10 * np.log10(n1s / n2))
+        # print('SNR:', 10 * np.log10(n1s / n2))
 
-    def shift_code(self, code):
-        res = np.roll(code, 1)
-        # res[len(code) - 1] = 1.0
-        return res
+    def read_config(self, file):
+        import configparser
+        config = configparser.ConfigParser()  # создаём объекта парсера
+        config.read(file)  # читаем конфиг
+        return config
 
-    def bin_conv(self, code):
-        res = []
-        code_copy = np.copy(code)
-        for i in range(len(code)):
-            tmp = 0
-            for j in range(len(code)):
-                if code_copy[j] == code[j]:
-                    tmp += 1
-                else:
-                    tmp -= 1
-            res.append(tmp)
-            code_copy = self.shift_code(code_copy)
-        return res
+    def gen_iter_arrs(self):
+        # self.conf_text.setText('gold.ini')
+        file = self.conf_text.text()
+        config = self.read_config(file)
+        main_dict = {}
+        for conf in config:
+            params = []
+            params_names = []
+            for param in config[conf]:
+                params.append(config[conf][param])
+                params_names.append(param)
+            if len(params) == 1:
+                if params_names[0] == 'range':
+                    range_params = ast.literal_eval(params[0])
+                    range_params[1] *= 1.1
+                    if range_params[2] == 0:
+                        range_params[2] = range_params[0]
+                    arr = np.arange(range_params[0], range_params[1], range_params[2])
+                    main_dict[conf] = arr
+                elif params_names[0] == 'type':
+                    main_dict[conf] = params[0]
+                elif params_names[0] == 'value':
+                    if int(params[0]) == 0:
+                        main_dict[conf] = [0]
+                    elif int(params[0]) == 1:
+                        main_dict[conf] = [1]
+                    elif int(params[0]) == 2:
+                        main_dict[conf] = [0, 1]
+                elif params_names[0] == 'numbers':
+                    arr = np.arange(1, int(params[0]) + 1)
+                    main_dict[conf] = arr
+            elif len(params) > 1:
+                if conf == 'Polynomial':
+                    pairs = []
+                    first = ast.literal_eval(params[0])
+                    if type(first) is list:
+                        first = [(first)]
+                    second = ast.literal_eval(params[1])
+                    if type(second) is list:
+                        second = [(second)]
+                    if int(params[2]) == 0:
+                        all_fs = []
+                        for f in first:
+                            fs = []
+                            for i in range(len(second)):
+                                fs.append(f)
+                            all_fs.append(fs)
 
-    def read_config(self):
-        pass
+                        for af in all_fs:
+                            for i in range(len(second)):
+                                val = (af[i], second[i])
+                                pairs.append(val)
+                    else:
+                        if len(second) == len(first):
+                            for i in range(len(second)):
+                                val = (first[i], second[i])
+                                pairs.append(val)
+                        else:
+                            return -1
+                    main_dict[conf] = pairs
+                elif conf == 'State':
+                    if int(params[1]) == 0:
+                        main_dict[params_names[1]] = [0]
+                    elif int(params[1]) == 1:
+                        main_dict[params_names[1]] = [1]
+                    elif int(params[1]) == 2:
+                        main_dict[params_names[1]] = [0, 1]
+
+                    if params[0] == '-1':
+                        main_dict[conf] = [[]]
+                    else:
+                        states = ast.literal_eval(params[0])
+                        if type(states) is list:
+                            states = [(states)]
+                        main_dict[conf] = states
+        print(main_dict)
+        return main_dict
+
+    def gen_req_arr(self, main_dict):
+        req_names = []
+        main_arr = []
+        out_names = []
+        if main_dict['Modulation'] == 'Gold':
+            req_names = ['Modulation', 'Frequency', 'ChipFreq', 'ChipN',
+                         'Polynomial', 'balanced', 'State', 'Diffusers', 'Distance', 'Noise', 'A0', 'r0', 'n',
+                         'Scale', 'Sigma', 'Unidist', 'NoRand', 'DirectRay', 'Realization']
+            out_names = ['Code', 'M-seq', 'State', 'Chek for balance', 'Right peaks', 'False peaks', 'Lost peaks',
+                         'Real peaks', 'Right peaks ids', 'Lost peaks ids', 'Right SNR', 'Lost SNR', 'SNR', 'Δω']
+        elif main_dict['Modulation'] == 'Radio Sig':
+            req_names = ['Modulation', 'Frequency', 'ChipFreq', 'ChipN', 'Periods', 'Diffusers', 'Distance',
+                         'Noise', 'A0', 'r0', 'n', 'Scale', 'Sigma', 'Unidist', 'NoRand', 'DirectRay', 'Realization']
+            out_names = ['Right peaks', 'False peaks', 'Lost peaks',
+                         'Real peaks', 'Right peaks ids', 'Lost peaks ids', 'Right SNR', 'Lost SNR', 'SNR', 'Δω']
+        for name in req_names:
+            main_arr.append(main_dict[name])
+        req_names.remove('Realization')
+        if main_dict['Modulation'] == 'Gold':
+            req_names.remove('State')
+        df_column = req_names + out_names
+        return main_arr, df_column
+
+    def gen_dir_name(self):
+        name = 'plots\\' + self.sig.modulation + '_' + str(self.phys_channel.diff) + '_' + str(
+            self.phys_channel.noise_u)
+        name = name.replace(' ', '')
+        name = name.replace('.', '@')
+        self.opt_rec.dir_name = name
+
+    def apply_params(self, val, modulation):
+        self.sig.u = 1
+        if modulation == 'Gold':
+            self.sig.modulation = modulation
+            self.sig.freq = val[0]
+            self.sig.ch_freq = val[1]
+            self.sig.ch_n = val[2]
+            self.sig.polys = val[3]
+            self.sig.bc = val[4]
+            self.sig.state = val[5]
+            self.phys_channel.diff = val[6]
+            self.phys_channel.dist = val[7]
+            self.phys_channel.noise_u = val[8]
+            self.opt_rec.noise_u = val[8]
+            self.phys_channel.a0 = val[9]
+            self.phys_channel.r0 = val[10]
+            self.phys_channel.n = val[11]
+            self.phys_channel.scale = val[12]
+            self.phys_channel.sigma = val[13]
+            self.phys_channel.uniform = val[14]
+            self.phys_channel.rand = not val[15]
+            self.phys_channel.dr = val[16]
+        if modulation == 'Radio Sig':
+            self.sig.modulation = modulation
+            self.sig.freq = val[0]
+            self.sig.ch_freq = val[1]
+            self.sig.ch_n = val[2]
+            self.sig.periods = val[3]
+            self.phys_channel.diff = val[4]
+            self.phys_channel.dist = val[5]
+            self.phys_channel.noise_u = val[6]
+            self.opt_rec.noise_u = val[6]
+            self.phys_channel.a0 = val[7]
+            self.phys_channel.r0 = val[8]
+            self.phys_channel.n = val[9]
+            self.phys_channel.scale = val[10]
+            self.phys_channel.sigma = val[11]
+            self.phys_channel.uniform = val[12]
+            self.phys_channel.rand = not val[13]
+            self.phys_channel.dr = val[14]
+
+    def gen_out(self):
+        self.gen_sig()
+        self.gen_delays()
+        self.gen_del_noise_sig()
+        self.gen_conv()
+        self.snr_calc()
+        self.gen_peaks()
+        self.gen_borders()
+        self.gen_spec()
+        out = []
+        sig_len = len(self.sig_x) * self.dt
+        real = self.ts + sig_len / 2
+        if self.sig.modulation == 'Gold':
+            out = (self.sig.code_info, self.sig.m_seq_info, self.sig.state_info, self.sig.bc_info,
+                   np.round(self.right_peaks[0], 3), np.round(self.false_peaks[0], 3), np.round(self.lost_peaks[0], 3),
+                   np.round(real, 3), self.finded_ids, self.lost_ids, np.round(self.snrs_finded, 2),
+                   np.round(self.snrs_lost, 2), np.round(self.snrs, 2), np.round(self.spec_w, 1))
+        if self.sig.modulation == 'Radio Sig':
+            out = (np.round(self.right_peaks[0], 3), np.round(self.false_peaks[0], 3), np.round(self.lost_peaks[0], 3),
+                   np.round(real, 3), self.finded_ids, self.lost_ids, np.round(self.snrs_finded, 2),
+                   np.round(self.snrs_lost, 2), np.round(self.snrs, 2), np.round(self.spec_w, 1))
+        return out
 
     def iter_params(self):
-        # iters: modulation, if (rad sig) periods, freq, modparams[freq, n], if (gold) poly and state, diffusers, dist, noise_u, dir_ray, A0, r0, n, scale, sigma, uniform_dist, no rand
-        # out data: snr, real rays, finded rays, if(gold) balanced_code
-        pass
+        import pandas as pd
+        from itertools import product
+        main_dict = self.gen_iter_arrs()
+        main_arr, df_column = self.gen_req_arr(main_dict)
+        modulation = main_arr[0]
+        df = pd.DataFrame()
+        number = 0
+        length = 1
+        for i in range(1, len(main_arr)):
+            length *= len(main_arr[i])
+        if modulation == 'Gold':
+            for freq, chf, chn, poly, balance, state, diff, dist, noise, a0, r0, n, scale, sigma, undist, norand, \
+                dirray, num in product(main_arr[1], main_arr[2], main_arr[3], main_arr[4], main_arr[5], main_arr[6],
+                                       main_arr[7], main_arr[8], main_arr[9], main_arr[10], main_arr[11], main_arr[12],
+                                       main_arr[13], main_arr[14], main_arr[15], main_arr[16], main_arr[17],
+                                       main_arr[18]):
+                number += 1
+                print(str(round(number / length * 100, 1)) + '%')
+                val = (freq, chf, chn, poly, balance, state, int(diff), dist, noise, a0, r0, n, scale, sigma,
+                       bool(undist), bool(norand), bool(dirray))
+                self.apply_params(val, modulation)
+                out = self.gen_out()
+                val = (modulation, freq, chf, chn, poly, balance, int(diff), dist, noise, a0, r0, n, scale, sigma,
+                       bool(undist), bool(norand), bool(dirray))
+                res = val + out
+                ser_df = pd.Series(res)
+                df = df.append(ser_df, ignore_index=True)
+
+        elif modulation == 'Radio Sig':
+            for freq, chf, chn, per, diff, dist, noise, a0, r0, n, scale, sigma, undist, norand, \
+                dirray, num in product(main_arr[1], main_arr[2], main_arr[3], main_arr[4], main_arr[5], main_arr[6],
+                                       main_arr[7], main_arr[8], main_arr[9], main_arr[10], main_arr[11], main_arr[12],
+                                       main_arr[13], main_arr[14], main_arr[15], main_arr[16]):
+                number += 1
+                print(str(round(number / length * 100, 1)) + '%')
+                val = (freq, chf, chn, per, int(diff), dist, noise, a0, r0, n, scale, sigma, bool(undist), bool(norand),
+                       bool(dirray))
+                self.apply_params(val, modulation)
+                out = self.gen_out()
+                val = (modulation, freq, chf, chn, per, int(diff), dist, noise, a0, r0, n, scale, sigma, bool(undist),
+                       bool(norand), bool(dirray))
+                res = val + out
+                ser_df = pd.Series(res)
+                df = df.append(ser_df, ignore_index=True)
+
+        df.columns = df_column
+        name = self.conf_text.text()
+        name = name.replace('.ini', '.xlsx')
+        df.to_excel(name)
 
     def show_signal(self):
         self.static_canvas.figure.clear()
@@ -584,22 +832,19 @@ class Ui_MainWindow(object):
         self.gen_sig()
         self.gen_delays()
         self.gen_del_noise_sig()
+        self.gen_dir_name()
         self.gen_conv()
         self.snr_calc()
-        '''try:'''
         self.gen_peaks()
         self.gen_borders()
-        '''except Exception as e:
-            print(e)'''
+        self.gen_spec()
         self.plot_delays()
         self.plot_sig()
         self.plot_del_noise_sig()
         self.plot_conv()
-        '''try:'''
         self.plot_peaks()
         self.plot_borders()
-        '''except Exception as e:
-            print(e)'''
+        self.axes[1][0].legend(loc='upper right')
         self.plot_spec()
         self.static_canvas.draw()
 
@@ -623,7 +868,6 @@ class Ui_MainWindow(object):
         self.delays_chb.setText(_translate("MainWindow", "+Delays"))
         self.dev_chb.setText(_translate("MainWindow", "Dev"))
         self.u_lb.setText(_translate("MainWindow", "U:"))
-        self.conf_btn.setText(_translate("MainWindow", "..."))
         self.mod_param_lb.setText(_translate("MainWindow", "Mod. par.:"))
         self.a0_lb.setText(_translate("MainWindow", "A₀:"))
         self.r0_lb.setText(_translate("MainWindow", "r₀:"))
@@ -632,7 +876,6 @@ class Ui_MainWindow(object):
         self.no_rand_u_chb.setText(_translate("MainWindow", "No rand"))
         self.scale_lb.setText(_translate("MainWindow", "Scale:"))
         self.sigma_lb.setText(_translate("MainWindow", "σₗₙ:"))
-        self.apply_btn.setText(_translate("MainWindow", "Apply"))
         self.orig_sig_spec_rb.setText(_translate("MainWindow", "Orig. spec."))
         self.del_noise_spec_rb.setText(_translate("MainWindow", "DN"))
         self.balanced_codes_chb.setText(_translate("MainWindow", "BC"))
@@ -642,6 +885,7 @@ class Ui_MainWindow(object):
         self.lost_rays_chb.setText(_translate("MainWindow", "Lost rays"))
         self.real_rays_chb.setText(_translate("MainWindow", "Real rays"))
         self.snr_show_chb.setText(_translate("MainWindow", "Show SNR"))
+        self.save_chb.setText(_translate("MainWindow", "Save"))
 
 
 if __name__ == "__main__":

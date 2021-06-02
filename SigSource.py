@@ -21,7 +21,7 @@ def add_zer(sig):
 
 class SigSource:
     def __init__(self):
-        self.modulation = 'Rect'
+        self.modulation = 'Gold'
         self.u = 0
         self.periods = 0
         self.freq = 0
@@ -31,6 +31,10 @@ class SigSource:
         self.poly = []
         self.state = []
         self.bc = 0
+        self.bc_info = None
+        self.m_seq_info = None
+        self.code_info = None
+        self.state_info = None
 
     def rect(self):
         x, step = np.linspace(0, self.periods, 1000, retstep=True)
@@ -49,12 +53,12 @@ class SigSource:
             modulation *= np.deg2rad(180)
             self.periods = len(modulation)
         else:
-            modulation = np.zeros(self.periods)
+            modulation = np.zeros(int(self.periods))
 
         duration = self.periods * T
 
         y = []
-        for i in range(self.periods):
+        for i in range(int(self.periods)):
             tmp_x = np.linspace(T * i, T * (i + 1), 25 * int(devide), endpoint=False)
             if i == self.periods - 1:
                 tmp_x = np.linspace(T * i, T * (i + 1), 25 * int(devide))
@@ -118,19 +122,25 @@ class SigSource:
     def gen_M_seq(self):
         ms = []
         bc = self.bc
-        self.gen_balanced_state()
+        self.state_info = [[],[]]
         for i, poly in enumerate(self.polys):
             self.poly = poly
             if len(self.state) == 0:
                 state = self.gen_state()
+                self.state_info[i] = state.tolist()
                 if bc:
                     if i == 0:
                         state = self.gen_balanced_state()
+                        self.state_info[i] = state.tolist()
                     elif i == 1:
                         state[0] = 0
+                        self.state_info[i] = state.tolist()
             else:
                 state = self.state[i]
+                self.state_info[i] = state
             ms.append(self.M_gen(state))
+        self.state_info = np.array(self.state_info).astype(np.int)
+        self.m_seq_info = np.array(ms).astype(np.int)
         return ms
 
     def gen_balanced_state(self):
@@ -170,6 +180,8 @@ class SigSource:
     def gold_code(self, ms):
         code = np.logical_xor(ms[0], ms[1])
         code = code.astype(np.float)
+        self.code_info = code.astype(np.int)
+        self.check_balanced(code)
         return code
 
     def check_balanced(self, code):
@@ -178,7 +190,7 @@ class SigSource:
         balanced = 0
         if np.abs(ones - zer) == 1:
             balanced = 1
-        return balanced
+        self.bc_info = balanced
 
     def generate_sig(self):
         sig_X, sig_Y, step = 0, 0, 0
@@ -190,3 +202,4 @@ class SigSource:
             sig_X, sig_Y, step = self.radio_sig(self.gold_code(self.gen_M_seq()))
         sig = (sig_X, sig_Y, step)
         return sig
+

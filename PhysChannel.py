@@ -27,27 +27,30 @@ class PhysChannel:
         self.sigma = 9
         self.n = 2.7
         self.dist = 1000
+        self.uniform = False
+        self.dr = False
+        self.rand = True
 
     def gen_noise(self, size):
         self.noise = np.random.normal(0, self.noise_u, size=size)
         return self.noise
 
-    def gen_delays(self, uniform, direct_ray):
-        if uniform is False:
+    def gen_delays(self):
+        if self.uniform is False:
             ts = expon.rvs(size=self.diff, scale=self.scale)
             ts = np.sort(ts)
         else:
             ts = np.arange(start=self.scale, stop=self.scale * self.diff + self.scale, step=self.scale)
-        if direct_ray:
+        if self.dr:
             d_r = np.array([0])
             ts = np.append(d_r, ts)
         return ts
 
-    def gen_amps(self, ts, rand, direct_ray):
+    def gen_amps(self, ts):
         r = self.r0 + self.dist
         us = []
         start = 0
-        if direct_ray:
+        if self.dr:
             start = 1
         for y in range(len(ts)):
             if y == 0:
@@ -56,12 +59,13 @@ class PhysChannel:
                 r += 300 * (ts[y] - ts[y - 1])
             u = self.a0 * (self.r0 / r) ** self.n
             us.append(u)
+        us = np.array(us)
 
-        if rand:
+        if self.rand:
             for u in range(start, len(us)):
                 y = np.random.normal(0, self.sigma, size=1)
                 alpha = 10 ** (y / 20)
                 us[u] *= alpha
-        return np.array(us)
+        return us
 
 

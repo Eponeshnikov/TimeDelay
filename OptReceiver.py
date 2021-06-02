@@ -1,20 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pywt
-from scipy.signal import find_peaks, argrelextrema
+from scipy.signal import find_peaks
 from scipy.interpolate import interp1d
-
-
-def gauss(x, A, mu, sigma):
-    return A * np.exp(-(x - mu) ** 2 / (2 * sigma ** 2))
-
-
-def cauchy(x, A, mu, gamma):
-    return A / np.pi * (gamma / ((x - mu) ** 2 + gamma ** 2))
-
-
-def map(x, in_min, in_max, out_min, out_max):
-    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+import os
 
 
 class OptReceiver:
@@ -23,9 +12,38 @@ class OptReceiver:
         self.sig = None
         self.us = None
         self.noise_u = 0
+        self.rect = False
+        self.dir_name = ''
+        self.dev = 0
+        self.dt = 1
+        self.save_fig = 0
+        self.match_flag = 1
+        self.border_flag = 1
 
     def matched_fil(self):
-        return np.convolve(np.flip(self.h), self.sig, mode='same') / len(self.sig)
+        res = np.convolve(np.flip(self.h), self.sig, mode='same') / len(self.sig)
+        if self.dev and self.match_flag:
+            plt.figure(figsize=(10, 5.6))
+            x = np.linspace(0, len(res) * self.dt, len(res))
+            plt.plot(x, res)
+            plt.grid()
+            plt.xlabel('t, us')
+            plt.ylabel('h(t)')
+            plt.title('Response of correlation receiver')
+            self.match_flag = 0
+            if self.save_fig:
+                if not os.path.exists(self.dir_name):
+                    os.mkdir(self.dir_name)
+                plt.savefig(self.dir_name + '/conv.png', dpi=400)
+            plt.clf()
+            plt.plot(x, np.abs(res))
+            plt.grid()
+            plt.xlabel('t, us')
+            plt.ylabel('h(t)')
+            plt.title('Response of correlation receiver')
+            if self.save_fig:
+                plt.savefig(self.dir_name + '/conv_abs.png', dpi=400)
+        return res
 
     def gen_min_height(self):
         size = len(self.matched_fil())
@@ -37,20 +55,44 @@ class OptReceiver:
         # Create wavelet object and define parameters
         w = pywt.Wavelet('sym4')
         maxlev = pywt.dwt_max_level(len(data), w.dec_len)
-        # maxlev = 2 # Override if desired
-        # print("maximum level is " + str(maxlev))
         # Decompose into wavelet components, to the level selected:
         coeffs = pywt.wavedec(data, 'sym4', level=maxlev)
-        # cA = pywt.threshold(cA, threshold*max(cA))
-        # plt.figure()
+        if self.dev:
+            plt.figure(figsize=(16, 9))
         for i in range(1, len(coeffs)):
-            # plt.subplot(maxlev, 1, i)
-            # plt.plot(coeffs[i])
+            if self.dev:
+                x = np.linspace(0, len(data) * self.dt, len(coeffs[i]))
+                plt.subplot(maxlev, 1, i)
+                plt.plot(x, coeffs[i])
+                plt.grid()
+                if i == 1:
+                    plt.title('Wavelet coefficients')
+                if i == len(coeffs) - 1:
+                    plt.xlabel('t, us')
+                else:
+                    plt.gca().axes.get_xaxis().set_visible(False)
             coeffs[i] = pywt.threshold(coeffs[i], threshold * max(coeffs[i]))
-            # plt.plot(coeffs[i])
+        if self.save_fig:
+            plt.savefig(self.dir_name + '/wavelet_coefs.png')
         datarec = pywt.waverec(coeffs, 'sym4')
-        # plt.grid()
-        # plt.show()
+        if self.dev:
+            plt.figure(figsize=(10, 5.6))
+            x = np.linspace(0, len(datarec) * self.dt, len(datarec))
+            plt.plot(x, datarec)
+            plt.grid()
+            plt.xlabel('t, us')
+            plt.ylabel('U, μV')
+            plt.title('Denoised response')
+            if self.save_fig:
+                plt.savefig(self.dir_name + '/conv_denoised.png', dpi=400)
+            plt.clf()
+            plt.plot(x, np.abs(datarec))
+            plt.grid()
+            plt.xlabel('t, us')
+            plt.ylabel('U, μV')
+            plt.title('Denoised response')
+            if self.save_fig:
+                plt.savefig(self.dir_name + '/conv_denoised_abs.png', dpi=400)
         return datarec
 
     def gen_border(self):
@@ -59,21 +101,28 @@ class OptReceiver:
         h = np.append(h, zer)
         conv = np.correlate(h, h, mode='full') / len(self.h)
         border = np.zeros(int(len(conv)))
-        conv /= max(conv)
-        peaks, _ = find_peaks(conv, distance=int(len(conv) / 20))
-        # sorted_peaks = np.flip(np.sort(conv[peaks]))
-        # sid_ratio = sorted_peaks[0] / (np.average(sorted_peaks) - sorted_peaks[0] / len(sorted_peaks))
-        index = np.arange(len(conv))
-        u_p = interp1d(index[peaks], conv[peaks], kind='quadratic', bounds_error=False, fill_value=0.0)
-        for k in range(0, len(conv)):
-            border[k] = u_p(k)
-        border += max(border) / 15
-        border /= max(border)
-        border = np.where(border > 0.1, border, 0.1)
-        '''plt.plot(border)
-        plt.grid()
-        plt.show()'''
-        # params = {'sid_ratio': sid_ratio, 'conv': conv}
+        if not self.rect:
+            conv /= max(conv)
+            peaks, _ = find_peaks(conv, distance=int(len(conv) / 20))
+            index = np.arange(len(conv))
+            u_p = interp1d(index[peaks], conv[peaks], kind='quadratic', bounds_error=False, fill_value=0.0)
+            for k in range(0, len(conv)):
+                border[k] = u_p(k)
+            border += max(border) / 15
+            border /= max(border)
+            border = np.where(border > 0.1, border, 0.1)
+        else:
+            border = conv / max(conv)
+        if self.dev and self.border_flag:
+            plt.figure()
+            x = np.linspace(0, len(border) * self.dt, len(border))
+            plt.plot(x, border)
+            plt.grid()
+            plt.xlabel('t, us')
+            plt.title('Border')
+            self.border_flag = 0
+            if self.save_fig:
+                plt.savefig(self.dir_name + '/border.png', dpi=400)
         return border
 
     def find_peaks_(self):
@@ -81,23 +130,13 @@ class OptReceiver:
         if threshold > 0.6:
             threshold = 0.6
         denoised = self.denoise(self.matched_fil(), threshold)
-        '''plt.figure()
-        plt.plot(denoised)
-        plt.grid()'''
-        plt.show()
         denoised_copy = np.copy(denoised)
         index = np.arange(len(denoised))
         height = self.gen_min_height() * 2.5
-        extr_x = argrelextrema(denoised, np.greater)
-        extr_y = denoised[extr_x]
         peaks, _ = find_peaks(denoised, height=height)
         peaks_y = denoised[peaks]
+        peaks_y_copy = np.copy(peaks_y)
         peaks_x = index[peaks]
-        '''plt.plot(denoised)
-        plt.plot(peaks_x, peaks_y, 'x')
-
-        plt.grid()
-        plt.show()'''
         peaks_zer = np.zeros(len(denoised))
         peaks_zer[peaks_x] = peaks_y
         all_peaks_x = []
@@ -106,9 +145,7 @@ class OptReceiver:
         borders_y = []
 
         while np.sum(peaks_y) != 0:
-            den_sum = np.sum(np.abs(denoised))
             border = self.gen_border()
-            # print('sid_ratio:', params['sid_ratio'])
             max_peak_x = peaks_x[np.argmax(peaks_y)]
             border_peak_x = np.argmax(border)
             left_x = max_peak_x - border_peak_x
@@ -134,7 +171,6 @@ class OptReceiver:
             tmp_peaks_x, _ = find_peaks(tmp_denoised, height=border[border_left_x:border_right_x], distance=20)
 
             if len(tmp_peaks_x) >= 2:
-                print('first')
                 for_del = []
                 for i, peak in enumerate(tmp_peaks_x):
                     condition = np.abs(tmp_denoised[peak] / max(tmp_denoised)
@@ -147,7 +183,6 @@ class OptReceiver:
                     tmp_peaks_x = np.delete(tmp_peaks_x, for_del)
 
                 if len(tmp_peaks_x) > 2:
-                    print('second')
                     diffs_x = np.diff(tmp_peaks_x)
                     for_del_diff = []
                     max_point = np.argmax(tmp_denoised)
@@ -165,22 +200,52 @@ class OptReceiver:
                 all_peaks_x.append(tmp_x[peak])
                 all_peaks_y.append(tmp_denoised[peak])
 
-            '''plt.cla()
-            plt.plot(peaks_x, peaks_y, 'x')
-            plt.plot(tmp_x, border[border_left_x:border_right_x])
-            plt.plot(tmp_x, tmp_denoised)
-            plt.plot(tmp_x[tmp_peaks_x], tmp_denoised[tmp_peaks_x], 'x')'''
             peaks_y[np.where((right_x > peaks_x) & (peaks_x > left_x))] = 0
             peaks_zer[left_x:right_x] = 0
-            # plt.savefig('signals/' + str(len(all_peaks_x)) + '.png')
-            print('-' * 10)
-            '''if (den_sum - np.sum(np.abs(denoised))) / den_sum < 0.2:
-                break'''
+
         all_peaks_x = list(set(all_peaks_x))
         all_peaks_x = np.array(all_peaks_x)
-        '''plt.hist(all_peaks_y)
-        plt.show()'''
-        '''plt.plot(index, denoised_copy)
-        plt.plot(all_peaks_x, all_peaks_y, 'x')
-        plt.show()'''
+        if self.dev:
+            plt.figure(figsize=(10, 5.6))
+            x = np.linspace(0, len(denoised_copy) * self.dt, len(denoised_copy))
+            plt.plot(x, np.abs(denoised_copy))
+            plt.xlabel('t, us')
+            plt.ylabel('U, μV')
+            plt.grid()
+            plt.title('Finding all peaks')
+            plt.plot(x[peaks_x], peaks_y_copy, '.', color='bisque')
+            if self.save_fig:
+                plt.savefig(self.dir_name + '/all_peaks.png', dpi=400)
+            plt.title('Response with borders')
+            for i in range(len(borders_x)):
+                plt.plot(borders_x[i] * self.dt, borders_y[i], color='orange', linestyle='dashdot')
+                if i == 0:
+                    plt.plot(borders_x[i] * self.dt, borders_y[i], color='orange', linestyle='dashdot',
+                             label='Border')
+
+            plt.hlines(y=height, xmin=0, xmax=max(x), color='grey', linestyle='dashed',
+                       label='Threshold')
+
+            if self.save_fig:
+                plt.savefig(self.dir_name + '/all_peaks_borders.png', dpi=400)
+            plt.clf()
+            plt.plot(x, np.abs(denoised_copy))
+            plt.xlabel('t, us')
+            plt.ylabel('U, μV')
+            plt.title('Peaks after filtering')
+            plt.grid()
+            for i in range(len(borders_x)):
+                plt.plot(borders_x[i] * self.dt, borders_y[i], color='orange', linestyle='dashdot')
+                if i == 0:
+                    plt.plot(borders_x[i] * self.dt, borders_y[i], color='orange', linestyle='dashdot',
+                             label='Border')
+
+            plt.hlines(y=height, xmin=0, xmax=max(x), color='grey', linestyle='dashed',
+                       label='Threshold')
+            plt.plot(all_peaks_x * self.dt, denoised_copy[all_peaks_x], 'v', color='g')
+            if self.save_fig:
+                plt.savefig(self.dir_name + '/filtr_peaks_borders.png', dpi=400)
+
+        if self.dev and not self.save_fig:
+            plt.show()
         return all_peaks_x, borders_x, borders_y, height
