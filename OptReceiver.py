@@ -6,6 +6,7 @@ from scipy.interpolate import interp1d
 import os
 
 
+
 class OptReceiver:
     def __init__(self):
         self.h = None
@@ -13,6 +14,7 @@ class OptReceiver:
         self.us = None
         self.noise_u = 0
         self.rect = False
+        self.gold = False
         self.dir_name = ''
         self.dev = 0
         self.dt = 1
@@ -183,13 +185,37 @@ class OptReceiver:
                     tmp_peaks_x = np.delete(tmp_peaks_x, for_del)
 
                 if len(tmp_peaks_x) > 2:
+                    tmp_peaks_x = np.array(tmp_peaks_x)
+                    tmp_peaks_x = np.sort(tmp_peaks_x)
+
                     diffs_x = np.diff(tmp_peaks_x)
                     for_del_diff = []
                     max_point = np.argmax(tmp_denoised)
-                    for i in range(len(diffs_x)):
-                        if diffs_x[i] <= 100:
+                    fs = []
+                    for i in range(len(tmp_peaks_x)):
+
+                        border_condition = np.abs(
+                            tmp_denoised[tmp_peaks_x[i]] / max(tmp_denoised) - border[border_left_x:border_right_x][
+                                tmp_peaks_x[i]] / max(tmp_denoised))
+                        if i == 0:
+                            diff_condition = 2 * diffs_x[i]
+                            diff_y_condition = 2 * tmp_denoised[tmp_peaks_x[i]] / tmp_denoised[tmp_peaks_x[i + 1]]
+                        elif i == len(tmp_peaks_x) - 1:
+                            diff_condition = 2 * diffs_x[i - 1]
+                            diff_y_condition = 2 * tmp_denoised[tmp_peaks_x[i]] / tmp_denoised[tmp_peaks_x[i - 1]]
+                        else:
+                            diff_condition = diffs_x[i - 1] + diffs_x[i]
+                            diff_y_condition = tmp_denoised[tmp_peaks_x[i]] / tmp_denoised[tmp_peaks_x[i + 1]] + \
+                                               tmp_denoised[tmp_peaks_x[i]] / tmp_denoised[tmp_peaks_x[i - 1]]
+
+                        if self.gold:
+                            diff_condition = 1
+                        f_ = border_condition * diff_condition * diff_y_condition
+                        fs.append(f_)
+                    for i, f in enumerate(fs):
+                        if f < max(fs)*0.9:
                             for_del_diff.append(i)
-                            for_del_diff.append(i + 1)
+
                     if len(for_del_diff) > 1:
                         for_del_diff = list(set(for_del_diff))
                         for_del_diff = np.array(for_del_diff)

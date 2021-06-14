@@ -18,8 +18,10 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import ast
+import time
 import numpy as np
 from collections import defaultdict
+from progressBar import PrintProgressBar
 
 
 def list_duplicates(seq):
@@ -390,14 +392,6 @@ class Ui_MainWindow(object):
         self.sig_del_noise_x, self.sig_del_noise_y = np.copy(self.sig_x), np.copy(self.sig_y)
         if self.delays_chb.isChecked():
             self.sig_del_noise_x, self.sig_del_noise_y = add_delays(self.sig_y, self.ts, self.us, self.dt)
-            '''fig, ax = plt.subplots(nrows=2, ncols=1)
-            ax[0].plot(self.sig_del_noise_x, self.sig_del_noise_y)
-            self.gen_conv()
-            ax[1].plot(self.sig_del_noise_x, self.conv)
-            ax[0].grid()
-            ax[1].grid()
-            plt.show()'''
-
         if self.noise_chb.isChecked():
             noise = self.phys_channel.gen_noise(len(self.sig_del_noise_y))
             self.sig_del_noise_y += noise
@@ -410,6 +404,12 @@ class Ui_MainWindow(object):
     def gen_peaks(self):
         if self.sig.modulation == 'Rect':
             self.opt_rec.rect = True
+        else:
+            self.opt_rec.rect = False
+        if self.sig.modulation == 'Gold':
+            self.opt_rec.gold = True
+        else:
+            self.opt_rec.gold = False
         self.peaks_x, self.border_x, self.border_y, self.height = self.opt_rec.find_peaks_()
         sig_x = np.append(self.sig_del_noise_x, np.array([max(self.sig_del_noise_x) + self.dt]))
         sig_len = len(self.sig_x) * self.dt
@@ -509,7 +509,7 @@ class Ui_MainWindow(object):
         sig_y = add_zer(sig_y)
         self.sig_fft_y, self.sig_fft_x = spectrum(sig_y, dt)
         self.sig_fft_y /= max(self.sig_fft_y)
-        ids = np.where(self.sig_fft_y > 0.5)[0]
+        ids = np.where(self.sig_fft_y > 0.7)[0]
         x_s = self.sig_fft_x[ids]
         x_s = np.sort(x_s)
         self.spec_w = x_s[len(x_s) - 1] - x_s[0]
@@ -584,12 +584,14 @@ class Ui_MainWindow(object):
 
     def snr_calc(self):
         n1s = []
+        n2s = []
         for u in self.us:
-            n1 = np.var(self.sig_y * u, ddof=1)
+            n1 = np.sum((self.sig_y * u) ** 2)
             n1s.append(n1)
+            n2 = len(self.sig_y) * self.phys_channel.noise_u ** 2
+            n2s.append(n2)
         n1s = np.array(n1s)
-        n2 = self.phys_channel.noise_u ** 2
-        self.snrs = 10 * np.log10(n1s / n2)
+        self.snrs = 10 * np.log10(n1s / n2s)
         # print('SNR:', 10 * np.log10(n1s / n2))
 
     def read_config(self, file):
@@ -600,7 +602,7 @@ class Ui_MainWindow(object):
 
     def gen_iter_arrs(self):
         # self.conf_text.setText('gold.ini')
-        file = self.conf_text.text()
+        file = 'config/' + self.conf_text.text()
         config = self.read_config(file)
         main_dict = {}
         for conf in config:
@@ -760,14 +762,19 @@ class Ui_MainWindow(object):
         sig_len = len(self.sig_x) * self.dt
         real = self.ts + sig_len / 2
         if self.sig.modulation == 'Gold':
-            out = (self.sig.code_info, self.sig.m_seq_info, self.sig.state_info, self.sig.bc_info,
-                   np.round(self.right_peaks[0], 3), np.round(self.false_peaks[0], 3), np.round(self.lost_peaks[0], 3),
-                   np.round(real, 3), self.finded_ids, self.lost_ids, np.round(self.snrs_finded, 2),
-                   np.round(self.snrs_lost, 2), np.round(self.snrs, 2), np.round(self.spec_w, 1))
+            out = (
+            self.sig.code_info.tolist(), self.sig.m_seq_info.tolist(), self.sig.state_info.tolist(), self.sig.bc_info,
+            np.round(self.right_peaks[0], 3).tolist(), np.round(self.false_peaks[0], 3).tolist(),
+            np.round(self.lost_peaks[0], 3).tolist(),
+            np.round(real, 3).tolist(), self.finded_ids.tolist(), self.lost_ids.tolist(),
+            np.round(self.snrs_finded, 2).tolist(),
+            np.round(self.snrs_lost, 2).tolist(), np.round(self.snrs, 2).tolist(), np.round(self.spec_w, 1))
         if self.sig.modulation == 'Radio Sig':
-            out = (np.round(self.right_peaks[0], 3), np.round(self.false_peaks[0], 3), np.round(self.lost_peaks[0], 3),
-                   np.round(real, 3), self.finded_ids, self.lost_ids, np.round(self.snrs_finded, 2),
-                   np.round(self.snrs_lost, 2), np.round(self.snrs, 2), np.round(self.spec_w, 1))
+            out = (np.round(self.right_peaks[0], 3).tolist(), np.round(self.false_peaks[0], 3).tolist(),
+                   np.round(self.lost_peaks[0], 3).tolist(),
+                   np.round(real, 3).tolist(), self.finded_ids.tolist(), self.lost_ids.tolist(),
+                   np.round(self.snrs_finded, 2).tolist(),
+                   np.round(self.snrs_lost, 2).tolist(), np.round(self.snrs, 2).tolist(), np.round(self.spec_w, 1))
         return out
 
     def iter_params(self):
@@ -787,8 +794,7 @@ class Ui_MainWindow(object):
                                        main_arr[7], main_arr[8], main_arr[9], main_arr[10], main_arr[11], main_arr[12],
                                        main_arr[13], main_arr[14], main_arr[15], main_arr[16], main_arr[17],
                                        main_arr[18]):
-                number += 1
-                print(str(round(number / length * 100, 1)) + '%')
+                start_time = time.time()
                 val = (freq, chf, chn, poly, balance, state, int(diff), dist, noise, a0, r0, n, scale, sigma,
                        bool(undist), bool(norand), bool(dirray))
                 self.apply_params(val, modulation)
@@ -798,14 +804,16 @@ class Ui_MainWindow(object):
                 res = val + out
                 ser_df = pd.Series(res)
                 df = df.append(ser_df, ignore_index=True)
+                number += 1
+                time_s = time.time() - start_time
+                PrintProgressBar(time_s, number, length, prefix='Progress:', suffix='Complete', length=50)
 
         elif modulation == 'Radio Sig':
             for freq, chf, chn, per, diff, dist, noise, a0, r0, n, scale, sigma, undist, norand, \
                 dirray, num in product(main_arr[1], main_arr[2], main_arr[3], main_arr[4], main_arr[5], main_arr[6],
                                        main_arr[7], main_arr[8], main_arr[9], main_arr[10], main_arr[11], main_arr[12],
                                        main_arr[13], main_arr[14], main_arr[15], main_arr[16]):
-                number += 1
-                print(str(round(number / length * 100, 1)) + '%')
+                start_time = time.time()
                 val = (freq, chf, chn, per, int(diff), dist, noise, a0, r0, n, scale, sigma, bool(undist), bool(norand),
                        bool(dirray))
                 self.apply_params(val, modulation)
@@ -815,11 +823,14 @@ class Ui_MainWindow(object):
                 res = val + out
                 ser_df = pd.Series(res)
                 df = df.append(ser_df, ignore_index=True)
+                number += 1
+                time_s = time.time() - start_time
+                PrintProgressBar(time_s, number, length, prefix='Progress:', suffix='Complete', length=50)
 
         df.columns = df_column
         name = self.conf_text.text()
-        name = name.replace('.ini', '.xlsx')
-        df.to_excel(name)
+        name = name.replace('.ini', str(len(main_arr[16])) + '.csv')
+        df.to_csv('csv/' + name)
 
     def show_signal(self):
         self.static_canvas.figure.clear()
