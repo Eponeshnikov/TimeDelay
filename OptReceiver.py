@@ -65,7 +65,7 @@ class OptReceiver:
             if self.dev:
                 x = np.linspace(0, len(data) * self.dt, len(coeffs[i]))
                 plt.subplot(maxlev, 1, i)
-                plt.plot(x, coeffs[i])
+                plt.plot(x, coeffs[i], label='Before threshold')
                 plt.grid()
                 if i == 1:
                     plt.title('Wavelet coefficients')
@@ -74,6 +74,12 @@ class OptReceiver:
                 else:
                     plt.gca().axes.get_xaxis().set_visible(False)
             coeffs[i] = pywt.threshold(coeffs[i], threshold * max(coeffs[i]))
+            if self.dev:
+                x = np.linspace(0, len(data) * self.dt, len(coeffs[i]))
+                plt.plot(x, coeffs[i], label='After threshold')
+        if self.dev:
+            plt.legend(bbox_to_anchor=(0.98, 15), loc='upper left')
+
         if self.save_fig:
             plt.savefig(self.dir_name + '/wavelet_coefs.png')
         datarec = pywt.waverec(coeffs, 'sym4')
@@ -239,7 +245,7 @@ class OptReceiver:
             plt.ylabel('U, μV')
             plt.grid()
             plt.title('Finding all peaks')
-            plt.plot(x[peaks_x], peaks_y_copy, '.', color='bisque')
+            plt.plot(x[peaks_x], peaks_y_copy, 'D', color='green')
             if self.save_fig:
                 plt.savefig(self.dir_name + '/all_peaks.png', dpi=400)
             plt.title('Response with borders')
@@ -274,4 +280,6 @@ class OptReceiver:
 
         if self.dev and not self.save_fig:
             plt.show()
+        self.match_flag = True
+        self.border_flag = True
         return all_peaks_x, borders_x, borders_y, height

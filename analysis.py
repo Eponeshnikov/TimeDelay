@@ -78,12 +78,15 @@ def append_peaks(rlf, real):
     return rlf, real
 
 
-def gen_diff(rlf, real):
+def gen_diff(rlf, real, abs=True):
     all_diff = []
     for i in range(len(rlf)):
         for_diff = np.vstack((rlf[i], np.array(real[i])))
         diff = np.diff(for_diff, axis=0)
-        all_diff.append(np.abs(diff[0]))
+        if abs:
+            all_diff.append(np.abs(diff[0]))
+        else:
+            all_diff.append(diff[0])
     return all_diff
 
 
@@ -120,20 +123,23 @@ def gen_avgs(data):
     return avgs
 
 
-def gen_f(real_avg, finded_avg, f_, l_):
+def gen_f(real_avg, finded_avg, d):
     f = []
     x = []
     y = []
+    av = []
     for i in range(len(real_avg)):
         for j in range(len(finded_avg)):
             if j > i:
                 real_avg_sum = real_avg[i] + real_avg[j]
+                if i ==1 and j == 3:
+                    av.append(real_avg_sum)
                 finded_avg_sum = finded_avg[i] + finded_avg[j]
                 z = (j - i) / (finded_avg_sum + 10e-17)
                 f.append(z)
                 x.append(i + 1)
                 y.append(j + 1)
-    return x, y, f
+    return x, y, f, av
 
 
 def gen_res(file):
@@ -174,39 +180,53 @@ def gen_res(file):
 
                 f_ = fa / (fa + tru)
                 r_p_ids, l_p_ids = extract_peaks_ids(d_sort)
+                righ_snrs = gen_list(d_sort['Right SNR'])
+                righ_snr = []
+                for snr in righ_snrs:
+                    righ_snr.append(np.mean(snr))
                 r_l_f_p = merge_right_lost(r_p, l_p, f_p)
                 r_l_f_p, real_p = append_peaks(r_l_f_p, real_p)
                 diffs_all = gen_diff(r_l_f_p, real_p)
                 diffs_all, max_length = append_diffs(diffs_all)
                 finded_avgs = gen_avgs(diffs_all)
                 r_r = gen_real_right(real_p, r_p_ids)
-                diffs_real = gen_diff(r_p, r_r)
+                diffs_real = gen_diff(r_p, r_r, abs=False)
+                err = []
+                for dr in diffs_real:
+                    for dr2 in dr:
+                        err.append(dr2)
+                err_ = np.std(err, ddof=1)
+                if ch == 5:
+                    print(dist, err_)
                 diffs_real, _ = append_diffs(diffs_real, max_len=max_length)
                 real_avgs = gen_avgs(diffs_real)
                 # print(real_avgs, finded_avgs)
-                X, Y, F = gen_f(real_avgs, finded_avgs, f_, l_)
+                X, Y, F, av = gen_f(real_avgs, finded_avgs, d)
+                av = []
 
-                '''print('Diffusers', d)
+
+                print('Diffusers', d)
                 print('Chip', ch)
                 print('Distance', dist)
                 print(X[np.argmax(F)])
-                print(Y[np.argmax(F)])'''
-                '''fig = plt.figure()
+                print(Y[np.argmax(F)])
+                fig = plt.figure()
                 ax = fig.add_subplot(111, projection='3d')
                 ax.set_xlabel('First Ray')
-                ax.set_ylabel('Second Ray')'''
+                ax.set_ylabel('Second Ray')
                 title = 'Scatterers: ' + str(d) + ' Distance: ' + str(dist) + 'm Opt. rays: (' \
                         + str(X[np.argmax(F)]) + '; ' + str(Y[np.argmax(F)]) + ') Δf = ' + str(spectrum) + 'MHz'
                 name = str(d) + '_' + str(dist) + '_' + str(X[np.argmax(F)]) + '_' + \
-                       str(Y[np.argmax(F)]) + '_' + str(spectrum) + '.png'
-                '''ax.set_title(title)
-                ax.scatter(X, Y, F, c=F)'''
-                val = [l_, f_, spectrum, Y[np.argmax(F)] - X[np.argmax(F)], F[np.argmax(F)]]
+                       str(Y[np.argmax(F)]) + '_' + str(spectrum) + '_2d.png'
+                ax.set_title(title)
+                ax.scatter(X, Y, F, c=F, cmap='rainbow', alpha=1)
+                ax.view_init(elev=0, azim=0)
+                val = [l_, f_, spectrum, Y[np.argmax(F)] - X[np.argmax(F)], F[np.argmax(F)], err_, np.mean(righ_snr)]
                 results.append(val)
-                # plt.savefig('plots/opt_rays/' + name, dpi=300)
+                plt.savefig('plots/opt_rays/' + name, dpi=300)
                 # print('save')
                 # results.append()
-                # plt.show()
+                #plt.show()
     return results
 
 
@@ -214,23 +234,26 @@ def analys_res(results_all):
     results1 = np.array(results_all[0])
     results2 = np.array(results_all[1])
     results = np.concatenate((results1, results2), axis=1)
-    rows = [0, 1]  # , 7, 6]
+    rows = [0,1]  # , 7, 6]
+
     colors11 = ['black', 'b', 'darkviolet', 'lightsalmon']
     colors12 = ['deepskyblue', 'r', 'lightsalmon', 'chocolate']
     colors21 = ['r', 'magenta', 'lawngreen', 'limegreen']
     colors22 = ['teal', 'cyan', 'gold', 'stategrey']
+    #labels= ['SNR; ']
     labels = ['β; ', 'α; ', 'Opt. func.; ', 'K; ']
     suffix = ['Gold ', 'No ']
-    fig, ax = plt.subplots(constrained_layout=True, figsize=(16, 9))
+    fig, ax = plt.subplots(constrained_layout=True, figsize=(10, 5))
 
     for row in range(len(rows)):
         y1 = results[:, rows[row]]  # gold
-        y2 = results[:, rows[row] + 5]  # radio
+        y2 = results[:, rows[row] + 7]  # radio
         max_y = max(max(y1), max(y2))
+        min_y = min(min(y1), min(y2))
         x1 = np.arange(0, len(y1))
         x2 = np.arange(8, len(y2) + 8)
         spec1 = results[:, 2]
-        spec2 = results[:, 7]
+        spec2 = results[:, 9]
 
         y_spl1 = np.split(y1, 8)
         y_spl2 = np.split(y2, 8)
@@ -266,8 +289,8 @@ def analys_res(results_all):
                 ax.plot(x21[i], y21[i], color=colors21[row], linestyle='dotted')
             ax.plot(x11[i], y11[i], 'ob', color=colors11[row])
             ax.plot(x21[i], y21[i], 'ob', color=colors21[row])
-            an11 = 'Δf = ' + str(spec1[i]) + ' MHz'
-            an21 = 'Δf = ' + str(spec2[i]) + ' MHz'
+            an11 = str(spec1[i]) + ' MHz'
+            an21 = str(spec2[i]) + ' MHz'
             ax.annotate(an11, xy=(np.mean(x11[i]) - len(y1) * 0.04, max_y * 1.02),
                         xytext=(np.mean(x11[i]) - len(y1) * 0.04, max_y * 1.02))
             ax.annotate(an21, xy=(np.mean(x21[i]) - len(y1) * 0.04, max_y * 1.02),
@@ -299,23 +322,24 @@ def analys_res(results_all):
             labl1[i] = str(int(xx_1[i] % 8 + 3))
 
         ax.set_xticks(xx_1)
-        ax.set_xticklabels(labl1)
-        ax.set_xlabel('Scatterers', fontsize=16)
+        ax.set_xticklabels(labl1, fontsize=8)
+        ax.set_xlabel('Number of rays', fontsize=16)
+        #ax.set_ylabel('SNR, dB')
         secax = ax.secondary_xaxis('top')
         secax.set_xticks(xx_2)
-        secax.set_xticklabels(labl2)
+        secax.set_xticklabels(labl2, fontweight="bold", fontsize=14)
         secax.set_xlabel('Distance, m', fontsize=16)
         ax.grid()
 
-        ax.set_ylim(0, max_y * 1.1)
+        ax.set_ylim(0*1.1, max_y * 1.1)
         ax.set_xlim(-1, len(y1))
 
         vl = np.arange(16, 64, 16).astype(np.float64)
         vl -= 0.5
-        ax.vlines(vl, ymin=-max_y, ymax=2 * max_y, color='grey', linestyle='dashdot')
+        ax.vlines(vl, ymin=min_y, ymax=2 * max_y, color='grey', linestyle='dashdot')
         ax.legend(bbox_to_anchor=(1, 1), loc='upper left')
 
-        plt.savefig('plots/analys_opt_rays/' + labels[row] + '_radiosig_gold.png', dpi=300)
+        #plt.savefig('plots/analys_opt_rays/' + labels[row] + '_radiosig_gold.png', dpi=300)
         print('s')
         ax.clear()
 

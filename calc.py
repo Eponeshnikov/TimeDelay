@@ -14,4 +14,25 @@ def H():
     plt.ylabel('H(k)')
     plt.show()
 
-H()
+#H()
+import pywt
+from pylab import *
+from numpy import *
+discrete_wavelets = ['db5', 'sym4', 'coif5', 'haar']
+print('discrete_wavelets-%s'%discrete_wavelets )
+st='db4'
+wavelet = pywt.DiscreteContinuousWavelet(st)
+print(wavelet)
+i=10
+phi, psi, x = wavelet.wavefun(level=i)
+
+#title("График самой вейвлет - функции -%s"%st)
+'''plot(x,psi,linewidth=2, label='level=%s'%i)
+grid()'''
+#legend(loc='best')
+
+title(st)
+plt.plot(x,phi,linewidth=2, label='level=%s'%i)
+#legend(loc='best')
+grid()
+show()
